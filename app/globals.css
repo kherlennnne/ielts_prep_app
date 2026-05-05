@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-dm-sans: 'DM Sans', sans-serif;
+  --font-dm-mono: 'DM Mono', monospace;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+  font-family: var(--font-dm-sans);
+}
+
+/* Apple-style calendar dots */
+.cal-dot {
+  @apply w-1 h-1 rounded-full mx-auto mt-0.5;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+
+/* Timer pulse */
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.timer-pulse { animation: timerPulse 1s ease-in-out infinite; }
+
+/* Smooth transitions for mobile nav */
+.nav-slide {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
