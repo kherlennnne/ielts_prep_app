@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { BottomNav } from "@/components/ui/BottomNav";
-import { Sidebar } from "@/components/ui/Sidebar";
+import { AppShell } from "@/components/ui/AppShell";
 
 export const metadata: Metadata = {
   title: "IELTS Prep Hub",
@@ -21,16 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-gray-50">
-        <div className="flex min-h-screen">
-          {/* Desktop sidebar */}
-          <Sidebar />
-          {/* Main content */}
-          <main className="flex-1 lg:ml-56 pb-20 lg:pb-0 min-h-screen">
-            {children}
-          </main>
-        </div>
-        {/* Mobile bottom nav */}
-        <BottomNav />
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

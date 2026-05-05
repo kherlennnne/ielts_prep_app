@@ -14,10 +14,24 @@ A full-featured IELTS preparation app built with Next.js 14 + Tailwind CSS. Mobi
 
 ```bash
 npm install
+cp .env.local.example .env.local
+# set BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD in .env.local
 npm run dev
 ```
 
 Then open [http://localhost:3000](http://localhost:3000)
+
+## Access Protection (username/password)
+
+This app includes a custom sign-in page (`/login`) backed by `middleware.ts` + secure auth cookie.
+
+1. Create `.env.local` (you can copy `.env.local.example`)
+2. Set:
+   - `BASIC_AUTH_USERNAME`
+   - `BASIC_AUTH_PASSWORD`
+3. Restart the dev server
+
+When someone opens the app, they are redirected to `/login` and must enter the correct credentials.
 
 ## Deploy to Vercel (easiest)
 
