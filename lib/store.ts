@@ -18,6 +18,7 @@ export interface TestSession {
   id: string;
   date: string;
   type: "listening" | "reading" | "writing";
+  materialId?: string;
   score?: number;
   maxScore: number;
   timeSpent: number; // seconds
@@ -25,6 +26,7 @@ export interface TestSession {
   correctAnswers?: Record<string, string>;
   feedback?: string;
   completed: boolean;
+  trackedEventId?: string;
 }
 
 export interface Material {

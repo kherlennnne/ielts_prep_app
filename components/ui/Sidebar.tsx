@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDays, BookOpen, FlaskConical, BarChart2, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LogoutButton } from "@/components/ui/LogoutButton";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: BarChart2 },
@@ -41,6 +42,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="px-5 py-4 border-t border-white/15">
+        <LogoutButton className="w-full mb-2 bg-white/15 text-white hover:bg-white/25" />
         <p className="text-white/45 text-[11px]">Band 9 or bust 💪</p>
       </div>
     </aside>

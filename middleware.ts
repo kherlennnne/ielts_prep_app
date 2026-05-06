@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const AUTH_COOKIE_NAME = "ielts_auth";
-const AUTH_COOKIE_VALUE = "ok";
-const LOGIN_PATH = "/login";
+import {
+  AUTH_COOKIE_NAME,
+  AUTH_COOKIE_VALUE,
+  INACTIVITY_TIMEOUT_SECONDS,
+  LAST_ACTIVE_COOKIE_NAME,
+  LOGIN_PATH,
+  REMEMBER_COOKIE_NAME,
+  REMEMBER_ME_MAX_AGE_SECONDS,
+} from "@/lib/auth";
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -14,24 +19,56 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname === LOGIN_PATH || pathname.startsWith("/api/auth/")) {
-    const isAuthed = request.cookies.get(AUTH_COOKIE_NAME)?.value === AUTH_COOKIE_VALUE;
+  const isAuthed = request.cookies.get(AUTH_COOKIE_NAME)?.value === AUTH_COOKIE_VALUE;
+  const rememberMe = request.cookies.get(REMEMBER_COOKIE_NAME)?.value === "1";
+  const rawLastActive = request.cookies.get(LAST_ACTIVE_COOKIE_NAME)?.value;
+  const lastActive = rawLastActive ? Number(rawLastActive) : NaN;
+  const hasValidLastActive = Number.isFinite(lastActive);
+  const isTimedOut =
+    isAuthed &&
+    (!hasValidLastActive || Date.now() - lastActive > INACTIVITY_TIMEOUT_SECONDS * 1000);
 
-    if (pathname === LOGIN_PATH && isAuthed) {
+  const clearAuthAndRedirectToLogin = () => {
+    const loginUrl = new URL(LOGIN_PATH, request.url);
+    loginUrl.searchParams.set("next", pathname);
+    const response = NextResponse.redirect(loginUrl);
+    for (const name of [AUTH_COOKIE_NAME, REMEMBER_COOKIE_NAME, LAST_ACTIVE_COOKIE_NAME]) {
+      response.cookies.set({
+        name,
+        value: "",
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+      });
+    }
+    return response;
+  };
+
+  if (pathname === LOGIN_PATH || pathname.startsWith("/api/auth/")) {
+    if (pathname === LOGIN_PATH && isAuthed && !isTimedOut) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
     return NextResponse.next();
   }
 
-  const isAuthed = request.cookies.get(AUTH_COOKIE_NAME)?.value === AUTH_COOKIE_VALUE;
-  if (!isAuthed) {
-    const loginUrl = new URL(LOGIN_PATH, request.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+  if (!isAuthed || isTimedOut) {
+    return clearAuthAndRedirectToLogin();
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.cookies.set({
+    name: LAST_ACTIVE_COOKIE_NAME,
+    value: Date.now().toString(),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
+  });
+  return response;
 }
 
 export const config = {

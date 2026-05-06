@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const AUTH_COOKIE_NAME = "ielts_auth";
-const AUTH_COOKIE_VALUE = "ok";
+import {
+  AUTH_COOKIE_NAME,
+  AUTH_COOKIE_VALUE,
+  LAST_ACTIVE_COOKIE_NAME,
+  REMEMBER_COOKIE_NAME,
+  REMEMBER_ME_MAX_AGE_SECONDS,
+} from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
     username?: string;
     password?: string;
+    rememberMe?: boolean;
   };
 
   const expectedUsername = process.env.BASIC_AUTH_USERNAME;
@@ -24,14 +29,35 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true });
+  const commonCookieOptions = {
+    httpOnly: true as const,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+  };
+
+  const rememberMe = Boolean(body.rememberMe);
+  const now = Date.now().toString();
+
   response.cookies.set({
     name: AUTH_COOKIE_NAME,
     value: AUTH_COOKIE_VALUE,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 14,
+    ...commonCookieOptions,
+    ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
+  });
+
+  response.cookies.set({
+    name: REMEMBER_COOKIE_NAME,
+    value: rememberMe ? "1" : "0",
+    ...commonCookieOptions,
+    ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
+  });
+
+  response.cookies.set({
+    name: LAST_ACTIVE_COOKIE_NAME,
+    value: now,
+    ...commonCookieOptions,
+    ...(rememberMe ? { maxAge: REMEMBER_ME_MAX_AGE_SECONDS } : {}),
   });
 
   return response;

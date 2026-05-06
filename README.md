@@ -33,6 +33,12 @@ This app includes a custom sign-in page (`/login`) backed by `middleware.ts` + s
 
 When someone opens the app, they are redirected to `/login` and must enter the correct credentials.
 
+Session behavior:
+
+- Default sign-in: current browser session only
+- `Remember me`: stays signed in for up to 1 day
+- Auto logout after 30 minutes of inactivity
+
 ## Deploy to Vercel (easiest)
 
 1. Push this folder to a GitHub repo

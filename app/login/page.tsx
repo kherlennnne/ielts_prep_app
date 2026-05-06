@@ -11,6 +11,7 @@ export default function LoginPage() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,7 +31,7 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, rememberMe }),
       });
 
       if (!response.ok) {
@@ -85,6 +86,20 @@ export default function LoginPage() {
               required
             />
           </label>
+
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-accent-darker focus:ring-accent/30"
+            />
+            Remember me for 1 day
+          </label>
+
+          <p className="text-xs text-gray-500">
+            Without remember me, sign-in lasts only for the current browser session.
+          </p>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

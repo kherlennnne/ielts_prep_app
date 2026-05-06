@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarDays, BookOpen, FlaskConical, BarChart2, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LogoutButton } from "@/components/ui/LogoutButton";
 
 const NAV = [
   { href: "/", label: "Home", icon: BarChart2 },
@@ -28,6 +29,9 @@ export function BottomNav() {
             </Link>
           );
         })}
+      </div>
+      <div className="px-3 pb-2 flex justify-end">
+        <LogoutButton compact className="text-gray-500 hover:bg-gray-100" />
       </div>
     </nav>
   );

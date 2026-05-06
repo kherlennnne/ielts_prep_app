@@ -6,15 +6,31 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { generateId, formatTime, getBandScore } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Clock, AlertTriangle, CheckCircle2, FlaskConical } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  FlaskConical,
+  FileText,
+  Headphones,
+  PenLine,
+} from "lucide-react";
 
 const TEST_TIMES = { reading: 3600, listening: 1800, writing: 3600 };
+const TYPE_ICONS = { listening: Headphones, reading: FileText, writing: PenLine };
+const TYPE_COLORS = {
+  listening: "bg-purple-50 text-purple-600 border-purple-100",
+  reading: "bg-blue-50 text-blue-600 border-blue-100",
+  writing: "bg-green-50 text-green-600 border-green-100",
+};
 
 export default function TestInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const materialId = searchParams.get("material");
-  const { materials, sessions, addSession, updateSession } = useStore();
+  const { materials, sessions, addSession, updateSession, addEvent, updateEvent } = useStore();
 
   const material = materials.find(m => m.id === materialId);
 
@@ -38,6 +54,7 @@ export default function TestInner() {
     setSessionId(id);
     addSession({
       id, date: new Date().toISOString().slice(0, 10),
+      materialId: material.id,
       type: material.type, maxScore: material.questions.length,
       timeSpent: 0, answers: {}, completed: false,
     });
@@ -66,12 +83,44 @@ export default function TestInner() {
 
     const score = correct;
     const timeSpent = totalTime - timeLeft;
+    const durationMinutes = Math.max(1, Math.ceil(timeSpent / 60));
+    const now = new Date();
+    const currentDate = now.toISOString().slice(0, 10);
+    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     const band = material.type !== "writing" ? getBandScore(correct, material.questions.length, material.type as "listening" | "reading") : undefined;
+
+    const existingSession = sessions.find(s => s.id === sid);
+    let trackedEventId = existingSession?.trackedEventId;
+
+    if (trackedEventId) {
+      updateEvent(trackedEventId, {
+        date: currentDate,
+        time: currentTime,
+        duration: durationMinutes,
+        type: "test",
+        completed: true,
+        title: `${material.title} (${material.type})`,
+        notes: `Auto-tracked from completed test (${formatTime(timeSpent)}).`,
+      });
+    } else {
+      trackedEventId = generateId();
+      addEvent({
+        id: trackedEventId,
+        date: currentDate,
+        title: `${material.title} (${material.type})`,
+        time: currentTime,
+        duration: durationMinutes,
+        type: "test",
+        completed: true,
+        notes: `Auto-tracked from completed test (${formatTime(timeSpent)}).`,
+      });
+    }
 
     updateSession(sid, {
       answers: finalAnswers, completed: true,
       score, timeSpent, correctAnswers: material.answerKey,
       feedback: generateFeedback(band, material.type, correct, material.questions.length),
+      trackedEventId,
     });
     setAnswers(finalAnswers);
   }
@@ -102,16 +151,23 @@ export default function TestInner() {
             </div>
           ) : (
             <div className="space-y-3">
-              {materials.map(m => (
-                <button key={m.id} onClick={() => router.push(`/test?material=${m.id}`)}
-                  className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-between text-left hover:shadow-md transition-all">
-                  <div>
-                    <p className="font-medium text-gray-900 text-sm">{m.title}</p>
-                    <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+              {materials.map((m) => {
+                const Icon = TYPE_ICONS[m.type];
+                return (
+                  <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
+                      <Icon size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 text-sm">{m.title}</p>
+                      <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+                    </div>
+                    <Button size="sm" onClick={() => router.push(`/test?material=${m.id}`)}>
+                      Start <ChevronRight size={13} />
+                    </Button>
                   </div>
-                  <ChevronRight size={16} className="text-gray-400" />
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

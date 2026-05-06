@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { AutoLogout } from "@/components/ui/AutoLogout";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { Sidebar } from "@/components/ui/Sidebar";
 
@@ -14,6 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <AutoLogout />
       <div className="flex min-h-screen">
         <Sidebar />
         <main className="flex-1 lg:ml-56 pb-20 lg:pb-0 min-h-screen">{children}</main>
