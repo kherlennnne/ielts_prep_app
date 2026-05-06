@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, Trash2, ChevronRight, FileText, Headphones, PenLine } from "lucide-react";
+import { Plus, Trash2, ChevronRight, FileText, Headphones, PenLine, Upload, Type, Image as ImageIcon, X } from "lucide-react";
 import { useStore, Material, Question } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -24,6 +24,8 @@ export default function MaterialsPage() {
   const [form, setForm] = useState({
     title: "", type: "reading" as Material["type"],
     content: "", rawQuestions: "", rawAnswers: "",
+    passageMode: "text" as "text" | "image",
+    passageImage: undefined as string | undefined,
   });
   const [parsed, setParsed] = useState<{ questions: Question[]; answerKey: Record<string, string> } | null>(null);
   const [parseError, setParseError] = useState("");
@@ -65,16 +67,25 @@ export default function MaterialsPage() {
     }
   }
 
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setForm(f => ({ ...f, passageImage: ev.target?.result as string }));
+    reader.readAsDataURL(file);
+  }
+
   function handleSave() {
     if (!parsed) return;
     addMaterial({
       id: generateId(), title: form.title, type: form.type,
       content: form.content, questions: parsed.questions,
       answerKey: parsed.answerKey, createdAt: new Date().toISOString(),
+      passageImage: form.passageImage,
     });
     setShowAdd(false);
     setStep(1);
-    setForm({ title: "", type: "reading", content: "", rawQuestions: "", rawAnswers: "" });
+    setForm({ title: "", type: "reading", content: "", rawQuestions: "", rawAnswers: "", passageMode: "text", passageImage: undefined });
     setParsed(null);
   }
 
@@ -159,12 +170,49 @@ export default function MaterialsPage() {
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Passage / Audio Script</label>
-              <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                rows={5} placeholder="Paste the reading passage or audio transcript here..."
-                className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Passage / Audio Script</label>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                  <button
+                    onClick={() => setForm(f => ({ ...f, passageMode: "text" }))}
+                    className={cn("px-2.5 py-1 flex items-center gap-1 transition-colors",
+                      form.passageMode === "text" ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50")}
+                  >
+                    <Type size={10} /> Text
+                  </button>
+                  <button
+                    onClick={() => setForm(f => ({ ...f, passageMode: "image" }))}
+                    className={cn("px-2.5 py-1 flex items-center gap-1 transition-colors border-l border-gray-200",
+                      form.passageMode === "image" ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50")}
+                  >
+                    <ImageIcon size={10} /> Image
+                  </button>
+                </div>
+              </div>
+              {form.passageMode === "text" ? (
+                <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                  rows={5} placeholder="Paste the reading passage or audio transcript here..."
+                  className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
+              ) : form.passageImage ? (
+                <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                  <img src={form.passageImage} alt="Passage" className="w-full" />
+                  <button
+                    onClick={() => setForm(f => ({ ...f, passageImage: undefined }))}
+                    className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors"
+                  >
+                    <X size={13} className="text-gray-500" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-accent hover:bg-accent-lightest transition-all group">
+                  <Upload size={22} className="text-gray-300 group-hover:text-accent mb-2 transition-colors" />
+                  <p className="text-sm font-medium text-gray-500 group-hover:text-accent-darker">Upload passage image</p>
+                  <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WebP</p>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                </label>
+              )}
             </div>
-            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.title || !form.content}>Next: Add Questions</Button>
+            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.title || (!form.content && !form.passageImage)}>Next: Add Questions</Button>
           </div>
         )}
 

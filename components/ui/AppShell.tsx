@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AutoLogout />
       <div className="flex min-h-screen">
         <Sidebar />
-        <main className="flex-1 lg:ml-56 pb-20 lg:pb-0 min-h-screen">{children}</main>
+        <main className="flex-1 lg:ml-16 pb-20 lg:pb-0 min-h-screen">{children}</main>
       </div>
       <BottomNav />
     </>

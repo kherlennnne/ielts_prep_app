@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { supabaseStorage } from "./supabase";
 
 export type EventType = "study" | "test" | "review" | "break";
 
@@ -36,6 +37,7 @@ export interface Material {
   content: string;
   questions: Question[];
   answerKey: Record<string, string>;
+  passageImage?: string;
   createdAt: string;
 }
 
@@ -46,6 +48,15 @@ export interface Question {
   text: string;
   options?: string[];
   section?: string;
+}
+
+export interface VocabWord {
+  id: string;
+  word: string;
+  context: string;
+  materialId?: string;
+  note?: string;
+  savedAt: string;
 }
 
 interface Store {
@@ -64,6 +75,13 @@ interface Store {
   materials: Material[];
   addMaterial: (m: Material) => void;
   deleteMaterial: (id: string) => void;
+  updateMaterial: (id: string, patch: Partial<Material>) => void;
+
+  // Vocabulary
+  vocab: VocabWord[];
+  addVocab: (v: VocabWord) => void;
+  deleteVocab: (id: string) => void;
+  updateVocab: (id: string, patch: Partial<VocabWord>) => void;
 
   // Active test state (non-persisted)
   activeTest: { materialId: string; sessionId: string } | null;
@@ -95,16 +113,26 @@ export const useStore = create<Store>()(
       addMaterial: (m) => set((s) => ({ materials: [...s.materials, m] })),
       deleteMaterial: (id) =>
         set((s) => ({ materials: s.materials.filter((m) => m.id !== id) })),
+      updateMaterial: (id, patch) =>
+        set((s) => ({ materials: s.materials.map((m) => m.id === id ? { ...m, ...patch } : m) })),
+
+      vocab: [],
+      addVocab: (v) => set((s) => ({ vocab: [...s.vocab, v] })),
+      deleteVocab: (id) => set((s) => ({ vocab: s.vocab.filter((v) => v.id !== id) })),
+      updateVocab: (id, patch) =>
+        set((s) => ({ vocab: s.vocab.map((v) => v.id === id ? { ...v, ...patch } : v) })),
 
       activeTest: null,
       setActiveTest: (t) => set({ activeTest: t }),
     }),
     {
       name: "ielts-store",
+      storage: createJSONStorage(() => supabaseStorage),
       partialize: (s) => ({
         events: s.events,
         sessions: s.sessions,
         materials: s.materials,
+        vocab: s.vocab,
       }),
     }
   )

@@ -17,14 +17,14 @@ export default function Dashboard() {
   const totalStudyMin = events.filter(e => e.completed).reduce((a, e) => a + e.duration, 0);
 
   const quickLinks = [
-    { href: "/calendar", icon: CalendarDays, label: "Planner", color: "bg-blue-50 text-blue-600 border-blue-100" },
-    { href: "/test", icon: FlaskConical, label: "Take Test", color: "bg-red-50 text-red-600 border-red-100" },
-    { href: "/materials", icon: BookOpen, label: "Materials", color: "bg-amber-50 text-amber-600 border-amber-100" },
-    { href: "/review", icon: GraduationCap, label: "Review", color: "bg-green-50 text-green-600 border-green-100" },
+    { href: "/calendar", icon: CalendarDays, label: "Planner" },
+    { href: "/test", icon: FlaskConical, label: "Take Test" },
+    { href: "/materials", icon: BookOpen, label: "Materials" },
+    { href: "/review", icon: GraduationCap, label: "Review" },
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <PageHeader
         title="Dashboard"
         subtitle={format(new Date(), "EEEE, MMMM d")}
@@ -49,10 +49,10 @@ export default function Dashboard() {
       <div className="px-4 lg:px-8 mb-6">
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick Access</h2>
         <div className="grid grid-cols-2 gap-3">
-          {quickLinks.map(({ href, icon: Icon, label, color }) => (
+          {quickLinks.map(({ href, icon: Icon, label }) => (
             <Link key={href} href={href}
-              className={cn("flex items-center gap-3 p-4 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all active:scale-95", )}>
-              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", color)}>
+              className="flex items-center gap-3 p-4 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all active:scale-95">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center border bg-strawberry border-strawberry text-chocolate-fondant">
                 <Icon size={18} />
               </div>
               <span className="font-medium text-gray-800 text-sm">{label}</span>

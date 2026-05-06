@@ -8,9 +8,10 @@ import { cn } from "@/lib/utils";
 interface LogoutButtonProps {
   className?: string;
   compact?: boolean;
+  iconOnly?: boolean;
 }
 
-export function LogoutButton({ className, compact = false }: LogoutButtonProps) {
+export function LogoutButton({ className, compact = false, iconOnly = false }: LogoutButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +40,7 @@ export function LogoutButton({ className, compact = false }: LogoutButtonProps) 
       )}
     >
       <LogOut size={compact ? 14 : 16} />
-      {loading ? "Signing out..." : "Log out"}
+      {!iconOnly && (loading ? "Signing out..." : "Log out")}
     </button>
   );
 }

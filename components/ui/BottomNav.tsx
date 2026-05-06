@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, BookOpen, FlaskConical, BarChart2, GraduationCap } from "lucide-react";
+import { CalendarDays, BookOpen, FlaskConical, BarChart2, BookMarked } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogoutButton } from "@/components/ui/LogoutButton";
 
@@ -10,7 +10,7 @@ const NAV = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/test", label: "Test", icon: FlaskConical },
   { href: "/materials", label: "Materials", icon: BookOpen },
-  { href: "/review", label: "Review", icon: GraduationCap },
+  { href: "/vocab", label: "Vocab", icon: BookMarked },
 ];
 
 export function BottomNav() {

@@ -1,21 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
-
 :root {
   --font-dm-sans: 'DM Sans', sans-serif;
   --font-dm-mono: 'DM Mono', monospace;
+  --font-instrument-serif: 'Instrument Serif', serif;
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-body {
-  @apply bg-gray-50 text-gray-900 antialiased;
-  font-family: var(--font-dm-sans);
+body, h2, h3 {
+  @apply bg-white text-gray-900 antialiased;
+  font-family: 'DM Sans', sans-serif;
+}
+
+h1 {
+  font-family: 'Instrument Serif', serif;
+  letter-spacing: 0.02em;
 }
 
 /* Apple-style calendar dots */

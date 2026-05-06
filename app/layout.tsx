@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50">
+      <body className="bg-white">
         <AppShell>{children}</AppShell>
       </body>
     </html>

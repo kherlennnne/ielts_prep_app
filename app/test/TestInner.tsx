@@ -4,18 +4,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useStore, Question } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { VocabDrawer } from "@/components/ui/VocabDrawer";
 import { generateId, formatTime, getBandScore } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  FlaskConical,
-  FileText,
-  Headphones,
-  PenLine,
+  ChevronLeft, ChevronRight, Clock, AlertTriangle, CheckCircle2, FlaskConical,
+  FileText, Headphones, PenLine, BookMarked, X,
 } from "lucide-react";
 
 const TEST_TIMES = { reading: 3600, listening: 1800, writing: 3600 };
@@ -26,11 +20,47 @@ const TYPE_COLORS = {
   writing: "bg-green-50 text-green-600 border-green-100",
 };
 
+function extractContext(text: string, word: string): string {
+  const idx = text.toLowerCase().indexOf(word.toLowerCase());
+  if (idx === -1) return word;
+  let start = idx;
+  let end = idx + word.length;
+  for (let i = idx - 1; i >= Math.max(0, idx - 150); i--) {
+    if (".!?\n".includes(text[i])) { start = i + 1; break; }
+    if (i === 0) start = 0;
+  }
+  for (let i = idx + word.length; i < Math.min(text.length, idx + word.length + 150); i++) {
+    if (".!?\n".includes(text[i])) { end = i + 1; break; }
+    if (i === text.length - 1) end = text.length;
+  }
+  return text.slice(start, end).trim();
+}
+
+function HighlightedText({ text, highlights }: { text: string; highlights: string[] }) {
+  if (!highlights.length || !text) return <span className="whitespace-pre-wrap">{text}</span>;
+  const unique = [...new Set(highlights.map(h => h.toLowerCase()))];
+  const escaped = unique.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
+  const parts = text.split(regex);
+  return (
+    <span className="whitespace-pre-wrap">
+      {parts.map((part, i) =>
+        unique.includes(part.toLowerCase())
+          ? <mark key={i} className="bg-yellow-100 text-yellow-900 rounded-sm px-0.5 not-italic">{part}</mark>
+          : <span key={i}>{part}</span>
+      )}
+    </span>
+  );
+}
+
 export default function TestInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const materialId = searchParams.get("material");
-  const { materials, sessions, addSession, updateSession, addEvent, updateEvent } = useStore();
+  const {
+    materials, sessions, addSession, updateSession, addEvent, updateEvent,
+    vocab, addVocab,
+  } = useStore();
 
   const material = materials.find(m => m.id === materialId);
 
@@ -40,11 +70,49 @@ export default function TestInner() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [sessionId, setSessionId] = useState("");
   const [showPassage, setShowPassage] = useState(true);
+  const [vocabOpen, setVocabOpen] = useState(false);
+  const [selectionInfo, setSelectionInfo] = useState<{ x: number; y: number; word: string; context: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const materialVocab = vocab.filter(v => v.materialId === materialId);
+
+  useEffect(() => {
+    if (!selectionInfo) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as Element).closest("[data-vocab-popup]")) setSelectionInfo(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [selectionInfo]);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
+
+  const handleMouseUp = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    const word = selection.toString().trim();
+    if (!word || word.length < 2 || word.length > 80 || word.includes("\n")) return;
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect.width) return;
+    const context = extractContext(material?.content ?? "", word);
+    setSelectionInfo({ x: rect.left + rect.width / 2, y: rect.top, word, context });
+  }, [material?.content]);
+
+  function handleSaveVocab() {
+    if (!selectionInfo) return;
+    addVocab({
+      id: generateId(),
+      word: selectionInfo.word,
+      context: selectionInfo.context,
+      materialId: materialId ?? undefined,
+      savedAt: new Date().toISOString(),
+    });
+    setSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+  }
 
   function startTest() {
     if (!material) return;
@@ -54,9 +122,8 @@ export default function TestInner() {
     setSessionId(id);
     addSession({
       id, date: new Date().toISOString().slice(0, 10),
-      materialId: material.id,
-      type: material.type, maxScore: material.questions.length,
-      timeSpent: 0, answers: {}, completed: false,
+      materialId: material.id, type: material.type,
+      maxScore: material.questions.length, timeSpent: 0, answers: {}, completed: false,
     });
     setPhase("active");
     timerRef.current = setInterval(() => {
@@ -87,38 +154,31 @@ export default function TestInner() {
     const now = new Date();
     const currentDate = now.toISOString().slice(0, 10);
     const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    const band = material.type !== "writing" ? getBandScore(correct, material.questions.length, material.type as "listening" | "reading") : undefined;
+    const band = material.type !== "writing"
+      ? getBandScore(correct, material.questions.length, material.type as "listening" | "reading")
+      : undefined;
 
     const existingSession = sessions.find(s => s.id === sid);
     let trackedEventId = existingSession?.trackedEventId;
 
     if (trackedEventId) {
       updateEvent(trackedEventId, {
-        date: currentDate,
-        time: currentTime,
-        duration: durationMinutes,
-        type: "test",
-        completed: true,
-        title: `${material.title} (${material.type})`,
+        date: currentDate, time: currentTime, duration: durationMinutes,
+        type: "test", completed: true, title: `${material.title} (${material.type})`,
         notes: `Auto-tracked from completed test (${formatTime(timeSpent)}).`,
       });
     } else {
       trackedEventId = generateId();
       addEvent({
-        id: trackedEventId,
-        date: currentDate,
-        title: `${material.title} (${material.type})`,
-        time: currentTime,
-        duration: durationMinutes,
-        type: "test",
-        completed: true,
+        id: trackedEventId, date: currentDate, title: `${material.title} (${material.type})`,
+        time: currentTime, duration: durationMinutes, type: "test", completed: true,
         notes: `Auto-tracked from completed test (${formatTime(timeSpent)}).`,
       });
     }
 
     updateSession(sid, {
-      answers: finalAnswers, completed: true,
-      score, timeSpent, correctAnswers: material.answerKey,
+      answers: finalAnswers, completed: true, score, timeSpent,
+      correctAnswers: material.answerKey,
       feedback: generateFeedback(band, material.type, correct, material.questions.length),
       trackedEventId,
     });
@@ -137,6 +197,7 @@ export default function TestInner() {
 
   useEffect(() => () => stopTimer(), [stopTimer]);
 
+  // ─── No material selected ────────────────────────────────────────────────────
   if (!material) {
     return (
       <div className="min-h-screen">
@@ -175,6 +236,7 @@ export default function TestInner() {
     );
   }
 
+  // ─── Intro ───────────────────────────────────────────────────────────────────
   if (phase === "intro") {
     return (
       <div className="min-h-screen">
@@ -191,10 +253,11 @@ export default function TestInner() {
               </div>
             </div>
             <div className="space-y-2 text-sm text-gray-600">
-              <p>• The timer starts immediately when you begin</p>
-              <p>• You can navigate between questions freely</p>
-              <p>• The test auto-submits when time runs out</p>
-              {material.type === "reading" && <p>• The passage is shown alongside questions</p>}
+              <p>• Timer starts immediately when you begin</p>
+              <p>• Navigate between questions freely</p>
+              <p>• Test auto-submits when time runs out</p>
+              {material.type !== "writing" && <p>• Highlight words in the passage to save vocabulary</p>}
+              {material.type !== "writing" && <p>• Upload an image if your passage is a scan</p>}
             </div>
           </div>
           <div className="flex gap-3">
@@ -206,74 +269,136 @@ export default function TestInner() {
     );
   }
 
+  // ─── Active ──────────────────────────────────────────────────────────────────
   if (phase === "active") {
     const q = material.questions[currentQ];
     const isWarning = timeLeft < 300;
     const totalQ = material.questions.length;
     const answered = Object.keys(answers).filter(k => answers[k]).length;
+    const hasPassage = material.type !== "writing";
 
     return (
       <div className="min-h-screen flex flex-col">
-        {/* Timer header */}
+        {/* Header */}
         <div className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 font-medium">Q{currentQ + 1}/{totalQ}</span>
             <span className="text-xs text-gray-300">·</span>
             <span className="text-xs text-gray-500">{answered} answered</span>
           </div>
-          <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-sm font-semibold",
-            isWarning ? "bg-red-50 text-red-600 timer-pulse" : "bg-accent-lightest text-accent-darker")}>
-            {isWarning && <AlertTriangle size={13} />}
-            <Clock size={13} />
-            {formatTime(timeLeft)}
+          <div className="flex items-center gap-2">
+            {hasPassage && (
+              <button
+                onClick={() => setVocabOpen(true)}
+                className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <BookMarked size={13} />
+                <span className="hidden sm:inline">Vocab</span>
+                {materialVocab.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {materialVocab.length}
+                  </span>
+                )}
+              </button>
+            )}
+            <div className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-sm font-semibold",
+              isWarning ? "bg-red-50 text-red-600 timer-pulse" : "bg-accent-lightest text-accent-darker"
+            )}>
+              {isWarning && <AlertTriangle size={13} />}
+              <Clock size={13} />
+              {formatTime(timeLeft)}
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col lg:flex-row">
-          {/* Passage (reading/listening) */}
-          {material.content && (material.type === "reading" || material.type === "listening") && (
-            <div className={cn("lg:w-1/2 lg:border-r border-gray-100", showPassage ? "block" : "hidden lg:block")}>
-              <div className="p-4 lg:p-6 lg:h-[calc(100vh-120px)] overflow-y-auto">
-                <div className="flex items-center justify-between mb-3 lg:hidden">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Passage</h3>
-                  <button onClick={() => setShowPassage(false)} className="text-xs text-accent-darker font-medium">Show Questions</button>
-                </div>
-                <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed text-[14px] whitespace-pre-wrap">{material.content}</div>
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+          {/* Passage panel */}
+          {hasPassage && (
+            <div className={cn(
+              "lg:w-1/2 lg:border-r border-gray-100 flex flex-col",
+              showPassage ? "flex" : "hidden lg:flex"
+            )}>
+              {/* Toolbar */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-white flex-shrink-0">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Passage</span>
+                <button onClick={() => setShowPassage(false)} className="lg:hidden text-xs text-accent-darker font-medium">
+                  Questions →
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+                {material.passageImage ? (
+                  <img src={material.passageImage} alt="Passage" className="w-full rounded-xl border border-gray-100" />
+                ) : material.content ? (
+                  <div onMouseUp={handleMouseUp} className="text-[14px] leading-relaxed text-gray-700 cursor-text">
+                    <HighlightedText text={material.content} highlights={materialVocab.map(v => v.word)} />
+                  </div>
+                ) : (
+                  <div className="text-center py-14 text-gray-400">
+                    <p className="text-sm">No passage added to this material</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Questions */}
-          <div className={cn("flex-1", material.content && !showPassage ? "block" : "", material.content && showPassage ? "hidden lg:flex lg:flex-col" : "flex flex-col")}>
+          {/* Questions panel */}
+          <div className={cn(
+            "flex-1 flex flex-col",
+            hasPassage && showPassage ? "hidden lg:flex" : "flex"
+          )}>
             <div className="flex-1 p-4 lg:p-6 overflow-y-auto">
-              {material.content && (
-                <button onClick={() => setShowPassage(true)} className="lg:hidden text-xs text-accent-darker font-medium mb-4 block">
-                  ← Show Passage
+              {hasPassage && (
+                <button
+                  onClick={() => setShowPassage(true)}
+                  className="lg:hidden text-xs text-accent-darker font-medium mb-4 block"
+                >
+                  ← Passage
                 </button>
               )}
-              {q && <QuestionCard question={q} answer={answers[q.id] ?? ""} onAnswer={v => setAnswers(a => ({ ...a, [q.id]: v }))} type={material.type} />}
+              {q && (
+                <QuestionCard
+                  question={q}
+                  answer={answers[q.id] ?? ""}
+                  onAnswer={v => setAnswers(a => ({ ...a, [q.id]: v }))}
+                  type={material.type}
+                />
+              )}
             </div>
 
-            {/* Question nav */}
-            <div className="border-t border-gray-100 p-4 bg-white">
+            {/* Nav */}
+            <div className="border-t border-gray-100 p-4 bg-white flex-shrink-0">
               <div className="flex flex-wrap gap-1.5 mb-4 max-h-20 overflow-y-auto">
                 {material.questions.map((qq, i) => (
-                  <button key={qq.id} onClick={() => { setCurrentQ(i); if (material.content) setShowPassage(false); }}
-                    className={cn("w-8 h-8 rounded-lg text-xs font-medium transition-all",
+                  <button
+                    key={qq.id}
+                    onClick={() => { setCurrentQ(i); if (hasPassage) setShowPassage(false); }}
+                    className={cn(
+                      "w-8 h-8 rounded-lg text-xs font-medium transition-all",
                       i === currentQ ? "bg-accent text-white" :
                       answers[qq.id] ? "bg-accent-lightest text-accent-darker border border-accent/30" :
-                      "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                      "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    )}
+                  >
                     {i + 1}
                   </button>
                 ))}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => { setCurrentQ(Math.max(0, currentQ - 1)); if (material.content) setShowPassage(false); }}
-                  disabled={currentQ === 0} className="p-2.5 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50">
+                <button
+                  onClick={() => { setCurrentQ(Math.max(0, currentQ - 1)); if (hasPassage) setShowPassage(false); }}
+                  disabled={currentQ === 0}
+                  className="p-2.5 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                >
                   <ChevronLeft size={18} className="text-gray-600" />
                 </button>
-                <button onClick={() => { setCurrentQ(Math.min(totalQ - 1, currentQ + 1)); if (material.content) setShowPassage(false); }}
-                  disabled={currentQ === totalQ - 1} className="p-2.5 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50">
+                <button
+                  onClick={() => { setCurrentQ(Math.min(totalQ - 1, currentQ + 1)); if (hasPassage) setShowPassage(false); }}
+                  disabled={currentQ === totalQ - 1}
+                  className="p-2.5 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                >
                   <ChevronRight size={18} className="text-gray-600" />
                 </button>
                 <Button variant="danger" className="flex-1" onClick={() => submitTest(sessionId, TEST_TIMES[material.type])}>
@@ -283,15 +408,49 @@ export default function TestInner() {
             </div>
           </div>
         </div>
+
+        {/* Vocab selection popup */}
+        {selectionInfo && (
+          <div
+            data-vocab-popup="true"
+            className="fixed z-50 bg-gray-900 text-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 text-xs pointer-events-auto"
+            style={{
+              left: selectionInfo.x,
+              top: selectionInfo.y,
+              transform: "translate(-50%, calc(-100% - 10px))",
+            }}
+          >
+            <span className="max-w-[130px] truncate opacity-60">"{selectionInfo.word}"</span>
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={handleSaveVocab}
+              className="bg-accent hover:bg-accent-dark text-white px-2.5 py-1 rounded-lg font-medium transition-colors whitespace-nowrap"
+            >
+              Save word
+            </button>
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => setSelectionInfo(null)}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        <VocabDrawer open={vocabOpen} onClose={() => setVocabOpen(false)} materialId={materialId ?? undefined} />
       </div>
     );
   }
 
+  // ─── Done ────────────────────────────────────────────────────────────────────
   if (phase === "done") {
     const session = sessions.find(s => s.id === sessionId);
     const correct = session?.score ?? 0;
     const total = material.questions.length;
-    const band = material.type !== "writing" ? getBandScore(correct, total, material.type as "listening" | "reading") : null;
+    const band = material.type !== "writing"
+      ? getBandScore(correct, total, material.type as "listening" | "reading")
+      : null;
 
     return (
       <div className="min-h-screen">
@@ -307,6 +466,15 @@ export default function TestInner() {
             )}
             <p className="text-gray-700 font-medium mt-3">{correct}/{total} correct</p>
             <p className="text-sm text-gray-500 mt-1">{session?.timeSpent ? formatTime(session.timeSpent) : "–"} time spent</p>
+            {materialVocab.length > 0 && (
+              <button
+                onClick={() => setVocabOpen(true)}
+                className="mt-3 flex items-center gap-1.5 text-xs text-accent-darker font-medium mx-auto hover:underline"
+              >
+                <BookMarked size={13} />
+                {materialVocab.length} words saved to vocab
+              </button>
+            )}
           </div>
 
           {session?.feedback && (
@@ -321,11 +489,11 @@ export default function TestInner() {
             <Button className="flex-1" onClick={() => { setPhase("intro"); setAnswers({}); setCurrentQ(0); }}>Retry</Button>
           </div>
         </div>
+        <VocabDrawer open={vocabOpen} onClose={() => setVocabOpen(false)} materialId={materialId ?? undefined} />
       </div>
     );
   }
 
-  // select phase fallback
   return (
     <div className="min-h-screen">
       <PageHeader title={material.title} />
@@ -336,7 +504,10 @@ export default function TestInner() {
   );
 }
 
-function QuestionCard({ question, answer, onAnswer, type }: { question: Question; answer: string; onAnswer: (v: string) => void; type: string }) {
+// ─── Question Card ────────────────────────────────────────────────────────────
+function QuestionCard({ question, answer, onAnswer, type }: {
+  question: Question; answer: string; onAnswer: (v: string) => void; type: string;
+}) {
   if (type === "writing") {
     return (
       <div>
@@ -344,9 +515,11 @@ function QuestionCard({ question, answer, onAnswer, type }: { question: Question
           <span className="bg-accent-lightest text-accent-darker text-xs font-semibold px-2.5 py-1 rounded-full">Q{question.number}</span>
         </div>
         <p className="text-gray-800 font-medium mb-4 leading-relaxed">{question.text}</p>
-        <textarea value={answer} onChange={e => onAnswer(e.target.value)}
+        <textarea
+          value={answer} onChange={e => onAnswer(e.target.value)}
           rows={12} placeholder="Write your response here..."
-          className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none leading-relaxed" />
+          className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none leading-relaxed"
+        />
         <p className="text-xs text-gray-400 mt-1 text-right">{answer.split(/\s+/).filter(Boolean).length} words</p>
       </div>
     );
@@ -365,12 +538,14 @@ function QuestionCard({ question, answer, onAnswer, type }: { question: Question
             const selected = answer === letter;
             return (
               <button key={i} onClick={() => onAnswer(letter)}
-                className={cn("w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all",
-                  selected ? "bg-accent-lightest border-accent text-accent-darker font-medium" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50")}>
-                <span className={cn("w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5",
-                  selected ? "border-accent bg-accent text-white" : "border-gray-300 text-gray-400")}>
-                  {letter}
-                </span>
+                className={cn(
+                  "w-full flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all",
+                  selected ? "bg-accent-lightest border-accent text-accent-darker font-medium" : "bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                )}>
+                <span className={cn(
+                  "w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5",
+                  selected ? "border-accent bg-accent text-white" : "border-gray-300 text-gray-400"
+                )}>{letter}</span>
                 <span className="text-sm leading-relaxed">{opt}</span>
               </button>
             );
@@ -390,8 +565,10 @@ function QuestionCard({ question, answer, onAnswer, type }: { question: Question
         <div className="grid grid-cols-3 gap-2">
           {["TRUE", "FALSE", "NOT GIVEN"].map(v => (
             <button key={v} onClick={() => onAnswer(v)}
-              className={cn("py-3 rounded-xl border text-xs font-semibold transition-all",
-                answer === v ? "bg-accent border-accent text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300")}>
+              className={cn(
+                "py-3 rounded-xl border text-xs font-semibold transition-all",
+                answer === v ? "bg-accent border-accent text-white" : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+              )}>
               {v}
             </button>
           ))}
@@ -400,17 +577,18 @@ function QuestionCard({ question, answer, onAnswer, type }: { question: Question
     );
   }
 
-  // Short answer / fill in blank
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
         <span className="bg-accent-lightest text-accent-darker text-xs font-semibold px-2.5 py-1 rounded-full">Q{question.number}</span>
-        <span className="text-xs text-gray-400 capitalize">{question.type === "fillblank" ? "Fill in the blank" : "Short answer"}</span>
+        <span className="text-xs text-gray-400">{question.type === "fillblank" ? "Fill in the blank" : "Short answer"}</span>
       </div>
       <p className="text-gray-800 font-medium mb-4 leading-relaxed">{question.text}</p>
-      <input value={answer} onChange={e => onAnswer(e.target.value)}
+      <input
+        value={answer} onChange={e => onAnswer(e.target.value)}
         placeholder="Your answer..."
-        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all" />
+        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
+      />
     </div>
   );
 }
