@@ -122,6 +122,12 @@ export default function CalendarPage() {
                   </div>
                   {ev.completed ? <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" /> :
                     <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />}
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteEvent(ev.id); }}
+                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               ))}
             </div>

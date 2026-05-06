@@ -2,24 +2,34 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { formatTime, getBandScore } from "@/lib/utils";
+import { formatTime, getBandScore, checkAnswer } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, GraduationCap } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, GraduationCap, StickyNote, Trash2 } from "lucide-react";
 
 export default function ReviewPage() {
-  const { sessions, materials } = useStore();
+  const { sessions, materials, updateMaterial, deleteSession } = useStore();
   const completed = sessions.filter(s => s.completed).sort((a, b) => b.date.localeCompare(a.date));
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "listening" | "reading" | "writing">("all");
+  const [editingExplanation, setEditingExplanation] = useState<{ sessionId: string; questionId: string } | null>(null);
+  const [draftText, setDraftText] = useState("");
 
   const filtered = filter === "all" ? completed : completed.filter(s => s.type === filter);
+
+  function saveExplanation(materialId: string, questionId: string, text: string) {
+    const material = materials.find(m => m.id === materialId);
+    if (!material) return;
+    updateMaterial(materialId, {
+      explanations: { ...(material.explanations ?? {}), [questionId]: text },
+    });
+    setEditingExplanation(null);
+  }
 
   return (
     <div className="min-h-screen">
       <PageHeader title="Review" subtitle={`${completed.length} test${completed.length !== 1 ? "s" : ""} completed`} />
 
       <div className="px-4 lg:px-8">
-        {/* Filter tabs */}
         <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
           {(["all", "reading", "listening", "writing"] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
@@ -39,32 +49,29 @@ export default function ReviewPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map(session => {
-              const material = materials.find(m => {
-                // match by type since we don't store materialId on session directly
-                return m.type === session.type && m.questions.some(q => session.answers[q.id] !== undefined);
-              });
+              const material = materials.find(m =>
+                m.type === session.type && m.questions.some(q => session.answers[q.id] !== undefined)
+              );
               const correct = session.score ?? 0;
               const total = session.maxScore;
               const band = session.type !== "writing" ? getBandScore(correct, total, session.type as "listening" | "reading") : null;
               const isExpanded = expanded === session.id;
 
               return (
-                <div key={session.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  {/* Session header */}
+                <div key={session.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden relative">
                   <button onClick={() => setExpanded(isExpanded ? null : session.id)}
                     className="w-full p-4 flex items-center gap-4 text-left hover:bg-gray-50 transition-colors">
-                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
-                      session.type === "reading" ? "bg-blue-50" : session.type === "listening" ? "bg-purple-50" : "bg-green-50")}>
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-accent-lightest")}>
                       {band ? (
-                        <span className={cn("text-lg font-bold", session.type === "reading" ? "text-blue-600" : session.type === "listening" ? "text-purple-600" : "text-green-600")}>
-                          {band}
-                        </span>
+                        <span className="text-lg font-bold text-accent-darker">{band}</span>
                       ) : (
-                        <span className="text-sm font-semibold text-green-600">W</span>
+                        <span className="text-sm font-semibold text-accent-darker">W</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm capitalize">{session.type} Test</p>
+                      <p className="font-semibold text-gray-900 text-sm capitalize">
+                        {material?.title ?? `${session.type} Test`}
+                      </p>
                       <div className="flex items-center gap-3 mt-0.5">
                         <span className="text-xs text-gray-500">{session.date}</span>
                         {session.type !== "writing" && (
@@ -77,35 +84,44 @@ export default function ReviewPage() {
                     </div>
                     {isExpanded ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
                   </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteSession(session.id); if (expanded === session.id) setExpanded(null); }}
+                    className="absolute top-3 right-10 p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                  >
+                    <Trash2 size={14} />
+                  </button>
 
-                  {/* Expanded detail */}
                   {isExpanded && (
-                    <div className="border-t border-gray-100 p-4">
-                      {/* Feedback */}
+                    <div className="border-t border-gray-100 p-4 space-y-4">
                       {session.feedback && (
-                        <div className="bg-accent-lightest rounded-xl p-3 mb-4">
+                        <div className="bg-accent-lightest rounded-xl p-3">
                           <p className="text-xs font-semibold text-accent-darker uppercase tracking-wider mb-1">Feedback</p>
                           <p className="text-sm text-gray-700">{session.feedback}</p>
                         </div>
                       )}
 
-                      {/* Answers review */}
                       {material && session.type !== "writing" && (
                         <div>
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Answer Review</p>
                           <div className="space-y-2">
                             {material.questions.map(q => {
-                              const given = (session.answers[q.id] ?? "").trim();
-                              const expected = (session.correctAnswers?.[q.id] ?? material.answerKey[q.id] ?? "").trim();
-                              const isCorrect = given.toLowerCase() === expected.toLowerCase();
+                              const given = session.answers[q.id] ?? "";
+                              const expected = session.correctAnswers?.[q.id] ?? material.answerKey[q.id] ?? "";
+                              const isCorrect = checkAnswer(given, expected);
+                              const explanation = material.explanations?.[q.id] ?? "";
+                              const isEditingThis = editingExplanation?.sessionId === session.id && editingExplanation?.questionId === q.id;
+
                               return (
-                                <div key={q.id} className={cn("rounded-xl p-3 border",
+                                <div key={q.id} className={cn("rounded-xl border overflow-hidden",
                                   isCorrect ? "bg-green-50 border-green-100" : given ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100")}>
-                                  <div className="flex items-start gap-2">
-                                    {isCorrect ? <CheckCircle2 size={14} className="text-green-500 mt-0.5 flex-shrink-0" /> :
-                                      <XCircle size={14} className="text-red-400 mt-0.5 flex-shrink-0" />}
+                                  <div className="flex items-start gap-2 p-3">
+                                    {isCorrect
+                                      ? <CheckCircle2 size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
+                                      : <XCircle size={14} className="text-red-400 mt-0.5 flex-shrink-0" />}
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-xs text-gray-600 mb-1">Q{q.number}: {q.text.slice(0, 80)}{q.text.length > 80 ? "…" : ""}</p>
+                                      <p className="text-xs text-gray-700 mb-1.5 leading-relaxed">
+                                        <span className="font-medium">Q{q.number}:</span> {q.text.slice(0, 100)}{q.text.length > 100 ? "…" : ""}
+                                      </p>
                                       <div className="flex flex-wrap gap-2">
                                         <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
                                           isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
@@ -119,6 +135,53 @@ export default function ReviewPage() {
                                       </div>
                                     </div>
                                   </div>
+
+                                  {/* Explanation */}
+                                  {material && (
+                                    <div className="border-t border-black/5 px-3 pb-3 pt-2.5">
+                                      {isEditingThis ? (
+                                        <div>
+                                          <textarea
+                                            value={draftText}
+                                            onChange={e => setDraftText(e.target.value)}
+                                            placeholder="Add explanation, notes, or why this is the correct answer..."
+                                            rows={3}
+                                            autoFocus
+                                            className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-2 outline-none focus:border-accent bg-white resize-none transition-colors leading-relaxed"
+                                          />
+                                          <div className="flex gap-1.5 mt-1.5">
+                                            <button
+                                              onClick={() => saveExplanation(material.id, q.id, draftText)}
+                                              className="text-xs bg-accent text-white px-3 py-1 rounded-lg font-medium"
+                                            >
+                                              Save
+                                            </button>
+                                            <button
+                                              onClick={() => setEditingExplanation(null)}
+                                              className="text-xs text-gray-500 px-3 py-1 rounded-lg hover:bg-black/5 transition-colors"
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => {
+                                            setEditingExplanation({ sessionId: session.id, questionId: q.id });
+                                            setDraftText(explanation);
+                                          }}
+                                          className="flex items-start gap-1.5 text-left w-full group"
+                                        >
+                                          <StickyNote size={11} className="text-gray-400 group-hover:text-accent mt-0.5 flex-shrink-0 transition-colors" />
+                                          {explanation ? (
+                                            <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-800 transition-colors">{explanation}</span>
+                                          ) : (
+                                            <span className="text-xs text-gray-400 italic group-hover:text-accent transition-colors">Add explanation…</span>
+                                          )}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -126,16 +189,45 @@ export default function ReviewPage() {
                         </div>
                       )}
 
-                      {/* Writing response */}
                       {session.type === "writing" && material && (
                         <div>
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Your Responses</p>
                           {material.questions.map(q => (
                             <div key={q.id} className="mb-4">
                               <p className="text-xs font-medium text-gray-600 mb-1">Q{q.number}: {q.text}</p>
-                              <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                              <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mb-2">
                                 {session.answers[q.id] || <span className="text-gray-400 italic">No response</span>}
                               </div>
+                              {/* Explanation for writing */}
+                              {editingExplanation?.sessionId === session.id && editingExplanation?.questionId === q.id ? (
+                                <div>
+                                  <textarea
+                                    value={draftText}
+                                    onChange={e => setDraftText(e.target.value)}
+                                    placeholder="Add teacher feedback or notes..."
+                                    rows={3}
+                                    autoFocus
+                                    className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-2 outline-none focus:border-accent bg-white resize-none transition-colors"
+                                  />
+                                  <div className="flex gap-1.5 mt-1.5">
+                                    <button onClick={() => saveExplanation(material.id, q.id, draftText)}
+                                      className="text-xs bg-accent text-white px-3 py-1 rounded-lg font-medium">Save</button>
+                                    <button onClick={() => setEditingExplanation(null)}
+                                      className="text-xs text-gray-500 px-3 py-1 rounded-lg hover:bg-gray-100">Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setEditingExplanation({ sessionId: session.id, questionId: q.id }); setDraftText(material.explanations?.[q.id] ?? ""); }}
+                                  className="flex items-start gap-1.5 text-left group">
+                                  <StickyNote size={11} className="text-gray-400 group-hover:text-accent mt-0.5 flex-shrink-0 transition-colors" />
+                                  {material.explanations?.[q.id] ? (
+                                    <span className="text-xs text-gray-600">{material.explanations[q.id]}</span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400 italic group-hover:text-accent transition-colors">Add feedback…</span>
+                                  )}
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>

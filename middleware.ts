@@ -7,6 +7,8 @@ import {
   LOGIN_PATH,
   REMEMBER_COOKIE_NAME,
   REMEMBER_ME_MAX_AGE_SECONDS,
+  RESTRICTED_USERS,
+  USER_COOKIE_NAME,
 } from "@/lib/auth";
 
 export function middleware(request: NextRequest) {
@@ -32,11 +34,12 @@ export function middleware(request: NextRequest) {
     const loginUrl = new URL(LOGIN_PATH, request.url);
     loginUrl.searchParams.set("next", pathname);
     const response = NextResponse.redirect(loginUrl);
-    for (const name of [AUTH_COOKIE_NAME, REMEMBER_COOKIE_NAME, LAST_ACTIVE_COOKIE_NAME]) {
+    const allCookies = [AUTH_COOKIE_NAME, REMEMBER_COOKIE_NAME, LAST_ACTIVE_COOKIE_NAME, USER_COOKIE_NAME];
+    for (const name of allCookies) {
       response.cookies.set({
         name,
         value: "",
-        httpOnly: true,
+        httpOnly: name !== USER_COOKIE_NAME,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
@@ -50,12 +53,17 @@ export function middleware(request: NextRequest) {
     if (pathname === LOGIN_PATH && isAuthed && !isTimedOut) {
       return NextResponse.redirect(new URL("/", request.url));
     }
-
     return NextResponse.next();
   }
 
   if (!isAuthed || isTimedOut) {
     return clearAuthAndRedirectToLogin();
+  }
+
+  // Block restricted users from accessing /materials
+  const currentUser = request.cookies.get(USER_COOKIE_NAME)?.value ?? "";
+  if (pathname.startsWith("/materials") && RESTRICTED_USERS.includes(currentUser)) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   const response = NextResponse.next();

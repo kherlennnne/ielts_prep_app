@@ -5,14 +5,14 @@ import { useStore, Question } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { VocabDrawer } from "@/components/ui/VocabDrawer";
-import { generateId, formatTime, getBandScore } from "@/lib/utils";
+import { generateId, formatTime, getBandScore, checkAnswer, getYouTubeId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   ChevronLeft, ChevronRight, Clock, AlertTriangle, CheckCircle2, FlaskConical,
   FileText, Headphones, PenLine, BookMarked, X,
 } from "lucide-react";
 
-const TEST_TIMES = { reading: 3600, listening: 1800, writing: 3600 };
+const DEFAULT_TIMES = { reading: 60, listening: 30, writing: 60 }; // minutes
 const TYPE_ICONS = { listening: Headphones, reading: FileText, writing: PenLine };
 const TYPE_COLORS = {
   listening: "bg-purple-50 text-purple-600 border-purple-100",
@@ -117,7 +117,7 @@ export default function TestInner() {
   function startTest() {
     if (!material) return;
     const id = generateId();
-    const totalTime = TEST_TIMES[material.type];
+    const totalTime = (material.duration ?? DEFAULT_TIMES[material.type]) * 60;
     setTimeLeft(totalTime);
     setSessionId(id);
     addSession({
@@ -143,9 +143,9 @@ export default function TestInner() {
 
     let correct = 0;
     material.questions.forEach(q => {
-      const given = (finalAnswers[q.id] ?? "").toLowerCase().trim();
-      const expected = (material.answerKey[q.id] ?? "").toLowerCase().trim();
-      if (given === expected) correct++;
+      const given = finalAnswers[q.id] ?? "";
+      const expected = material.answerKey[q.id] ?? "";
+      if (checkAnswer(given, expected)) correct++;
     });
 
     const score = correct;
@@ -249,7 +249,7 @@ export default function TestInner() {
               </div>
               <div>
                 <p className="font-semibold text-gray-900 capitalize">{material.type} Test</p>
-                <p className="text-sm text-gray-500">{material.questions.length} questions · {Math.round(TEST_TIMES[material.type] / 60)} minutes</p>
+                <p className="text-sm text-gray-500">{material.questions.length} questions · {material.duration ?? DEFAULT_TIMES[material.type]} minutes</p>
               </div>
             </div>
             <div className="space-y-2 text-sm text-gray-600">
@@ -271,20 +271,64 @@ export default function TestInner() {
 
   // ─── Active ──────────────────────────────────────────────────────────────────
   if (phase === "active") {
-    const q = material.questions[currentQ];
     const isWarning = timeLeft < 300;
     const totalQ = material.questions.length;
     const answered = Object.keys(answers).filter(k => answers[k]).length;
     const hasPassage = material.type !== "writing";
+
+    // Build a flat list of all groups across all sections
+    type GroupEntry = { section: NonNullable<typeof material.sections>[0] | null; group: NonNullable<typeof material.sections>[0]["groups"][0] };
+    const allGroups: GroupEntry[] = [];
+    if (material.sections?.length) {
+      for (const sec of material.sections) {
+        for (const grp of sec.groups) {
+          allGroups.push({ section: sec, group: grp });
+        }
+      }
+    }
+    if (!allGroups.length) {
+      allGroups.push({ section: null, group: { id: "default", questions: material.questions } });
+    }
+
+    // currentQ is reused as the group index
+    const groupIdx = Math.min(currentQ, allGroups.length - 1);
+    const { section: currentSection, group: currentGroup } = allGroups[groupIdx];
+    const totalGroups = allGroups.length;
+
+    const passageContent = currentSection?.content ?? material.content;
+    const passageImg = currentSection?.passageImage ?? material.passageImage;
+    const passageTitle = currentSection?.title;
+    const youtubeId = currentSection?.youtubeUrl ? getYouTubeId(currentSection.youtubeUrl) : null;
+    const youtubeStart = currentSection?.youtubeStart ?? 0;
+    const youtubeEnd = currentSection?.youtubeEnd;
+
+    const firstQ = currentGroup.questions[0];
+    const lastQ = currentGroup.questions[currentGroup.questions.length - 1];
+    const groupLabel = firstQ && lastQ && firstQ.number !== lastQ.number
+      ? `Q${firstQ.number}–Q${lastQ.number}`
+      : firstQ ? `Q${firstQ.number}` : "";
+
+    function groupIdxForQuestion(qId: string): number {
+      const idx = allGroups.findIndex(({ group }) => group.questions.some(q => q.id === qId));
+      return idx === -1 ? 0 : idx;
+    }
 
     return (
       <div className="min-h-screen flex flex-col">
         {/* Header */}
         <div className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-medium">Q{currentQ + 1}/{totalQ}</span>
+            {totalGroups > 1 && (
+              <span className="text-xs text-gray-500 font-medium">Group {groupIdx + 1}/{totalGroups}</span>
+            )}
+            {groupLabel && (
+              <>
+                {totalGroups > 1 && <span className="text-xs text-gray-300">·</span>}
+                <span className="text-xs text-gray-500 font-medium">{groupLabel}</span>
+              </>
+            )}
             <span className="text-xs text-gray-300">·</span>
-            <span className="text-xs text-gray-500">{answered} answered</span>
+            <span className="text-xs text-gray-500">{answered}/{totalQ} answered</span>
           </div>
           <div className="flex items-center gap-2">
             {hasPassage && (
@@ -319,33 +363,43 @@ export default function TestInner() {
               "lg:w-1/2 lg:border-r border-gray-100 flex flex-col",
               showPassage ? "flex" : "hidden lg:flex"
             )}>
-              {/* Toolbar */}
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-white flex-shrink-0">
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Passage</span>
                 <button onClick={() => setShowPassage(false)} className="lg:hidden text-xs text-accent-darker font-medium">
                   Questions →
                 </button>
               </div>
-
-              {/* Content */}
               <div className="flex-1 overflow-y-auto p-4 lg:p-6">
-                {material.passageImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={material.passageImage} alt="Passage" className="w-full rounded-xl border border-gray-100" />
-                ) : material.content ? (
-                  <div onMouseUp={handleMouseUp} className="text-[14px] leading-relaxed text-gray-700 cursor-text">
-                    <HighlightedText text={material.content} highlights={materialVocab.map(v => v.word)} />
+                {passageTitle && (
+                  <h3 className="font-serif text-lg text-gray-900 mb-4 leading-snug">{passageTitle}</h3>
+                )}
+                {youtubeId && (
+                  <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 aspect-video">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${youtubeId}?start=${youtubeStart}${youtubeEnd ? `&end=${youtubeEnd}` : ""}`}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
                   </div>
-                ) : (
+                )}
+                {passageImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={passageImg} alt="Passage" className="w-full rounded-xl border border-gray-100" />
+                ) : passageContent ? (
+                  <div onMouseUp={handleMouseUp} className="text-[14px] leading-relaxed text-gray-700 cursor-text">
+                    <HighlightedText text={passageContent} highlights={materialVocab.map(v => v.word)} />
+                  </div>
+                ) : !youtubeId ? (
                   <div className="text-center py-14 text-gray-400">
                     <p className="text-sm">No passage added to this material</p>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           )}
 
-          {/* Questions panel */}
+          {/* Questions panel — all questions in the current group */}
           <div className={cn(
             "flex-1 flex flex-col",
             hasPassage && showPassage ? "hidden lg:flex" : "flex"
@@ -359,50 +413,75 @@ export default function TestInner() {
                   ← Passage
                 </button>
               )}
-              {q && (
-                <QuestionCard
-                  question={q}
-                  answer={answers[q.id] ?? ""}
-                  onAnswer={v => setAnswers(a => ({ ...a, [q.id]: v }))}
-                  type={material.type}
-                />
+              {/* Group instruction shown once at the top */}
+              {currentGroup.instruction && (
+                <div className="mb-5 p-3.5 bg-accent-lightest border border-accent/20 rounded-xl">
+                  <p className="text-xs text-accent-darker leading-relaxed">{currentGroup.instruction}</p>
+                </div>
               )}
+              {/* Optional diagram / map for this group */}
+              {currentGroup.questionImage && (
+                <div className="mb-5 rounded-xl overflow-hidden border border-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={currentGroup.questionImage} alt="Diagram" className="w-full" />
+                </div>
+              )}
+              {/* All questions in this group */}
+              <div className="space-y-5">
+                {currentGroup.questions.map(q => (
+                  <QuestionCard
+                    key={q.id}
+                    question={q}
+                    answer={answers[q.id] ?? ""}
+                    onAnswer={v => setAnswers(a => ({ ...a, [q.id]: v }))}
+                    type={material.type}
+                    forceText={!!currentGroup.questionImage}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Nav */}
             <div className="border-t border-gray-100 p-4 bg-white flex-shrink-0">
+              {/* Question dots — clicking jumps to the group containing that question */}
               <div className="flex flex-wrap gap-1.5 mb-4 max-h-20 overflow-y-auto">
-                {material.questions.map((qq, i) => (
-                  <button
-                    key={qq.id}
-                    onClick={() => { setCurrentQ(i); if (hasPassage) setShowPassage(false); }}
-                    className={cn(
-                      "w-8 h-8 rounded-lg text-xs font-medium transition-all",
-                      i === currentQ ? "bg-accent text-white" :
-                      answers[qq.id] ? "bg-accent-lightest text-accent-darker border border-accent/30" :
-                      "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    )}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                {material.questions.map(qq => {
+                  const qGrpIdx = groupIdxForQuestion(qq.id);
+                  const isActive = qGrpIdx === groupIdx;
+                  return (
+                    <button
+                      key={qq.id}
+                      onClick={() => { setCurrentQ(qGrpIdx); if (hasPassage) setShowPassage(false); }}
+                      className={cn(
+                        "w-8 h-8 rounded-lg text-xs font-medium transition-all",
+                        isActive
+                          ? "bg-accent text-white"
+                          : answers[qq.id]
+                          ? "bg-accent-lightest text-accent-darker border border-accent/30"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      )}
+                    >
+                      {qq.number}
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setCurrentQ(Math.max(0, currentQ - 1)); if (hasPassage) setShowPassage(false); }}
-                  disabled={currentQ === 0}
+                  onClick={() => { setCurrentQ(Math.max(0, groupIdx - 1)); if (hasPassage) setShowPassage(false); }}
+                  disabled={groupIdx === 0}
                   className="p-2.5 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
                 >
                   <ChevronLeft size={18} className="text-gray-600" />
                 </button>
                 <button
-                  onClick={() => { setCurrentQ(Math.min(totalQ - 1, currentQ + 1)); if (hasPassage) setShowPassage(false); }}
-                  disabled={currentQ === totalQ - 1}
+                  onClick={() => { setCurrentQ(Math.min(totalGroups - 1, groupIdx + 1)); if (hasPassage) setShowPassage(false); }}
+                  disabled={groupIdx === totalGroups - 1}
                   className="p-2.5 rounded-xl border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
                 >
                   <ChevronRight size={18} className="text-gray-600" />
                 </button>
-                <Button variant="danger" className="flex-1" onClick={() => submitTest(sessionId, TEST_TIMES[material.type])}>
+                <Button variant="danger" className="flex-1" onClick={() => submitTest(sessionId, (material.duration ?? DEFAULT_TIMES[material.type]) * 60)}>
                   Submit Test
                 </Button>
               </div>
@@ -506,8 +585,8 @@ export default function TestInner() {
 }
 
 // ─── Question Card ────────────────────────────────────────────────────────────
-function QuestionCard({ question, answer, onAnswer, type }: {
-  question: Question; answer: string; onAnswer: (v: string) => void; type: string;
+function QuestionCard({ question, answer, onAnswer, type, forceText }: {
+  question: Question; answer: string; onAnswer: (v: string) => void; type: string; forceText?: boolean;
 }) {
   if (type === "writing") {
     return (
@@ -526,7 +605,7 @@ function QuestionCard({ question, answer, onAnswer, type }: {
     );
   }
 
-  if (question.type === "mcq" && question.options) {
+  if (question.type === "mcq" && question.options && !forceText) {
     return (
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -556,7 +635,7 @@ function QuestionCard({ question, answer, onAnswer, type }: {
     );
   }
 
-  if (question.type === "truefalse") {
+  if (question.type === "truefalse" && !forceText) {
     return (
       <div>
         <div className="flex items-center gap-2 mb-3">

@@ -4,11 +4,12 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, BookOpen, FlaskConical, BarChart2, GraduationCap, BookMarked } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LogoutButton } from "@/components/ui/LogoutButton";
+import { useUser } from "@/lib/useUser";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: BarChart2 },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/materials", label: "Materials", icon: BookOpen },
+  { href: "/materials", label: "Materials", icon: BookOpen, restricted: true },
   { href: "/test", label: "Test Center", icon: FlaskConical },
   { href: "/review", label: "Review", icon: GraduationCap },
   { href: "/vocab", label: "Vocabulary", icon: BookMarked },
@@ -16,10 +17,13 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { isRestricted } = useUser();
+  const visibleNav = NAV.filter(item => !(item.restricted && isRestricted));
+
   return (
     <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-full w-16 bg-strawberry z-40">
       <nav className="flex-1 flex flex-col items-center justify-center gap-1">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {visibleNav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== "/" && pathname.startsWith(href));
           return (
             <Link

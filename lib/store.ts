@@ -34,10 +34,13 @@ export interface Material {
   id: string;
   title: string;
   type: "listening" | "reading" | "writing";
-  content: string;
+  content?: string;
+  passageImage?: string;
+  sections?: Section[];
   questions: Question[];
   answerKey: Record<string, string>;
-  passageImage?: string;
+  duration?: number; // minutes
+  explanations?: Record<string, string>; // questionId → explanation
   createdAt: string;
 }
 
@@ -48,6 +51,24 @@ export interface Question {
   text: string;
   options?: string[];
   section?: string;
+}
+
+export interface QuestionGroup {
+  id: string;
+  instruction?: string;
+  questionImage?: string; // diagram / map / table
+  questions: Question[];
+}
+
+export interface Section {
+  id: string;
+  title?: string;
+  content?: string;
+  passageImage?: string;
+  youtubeUrl?: string;
+  youtubeStart?: number; // seconds
+  youtubeEnd?: number;   // seconds
+  groups: QuestionGroup[];
 }
 
 export interface VocabWord {
@@ -70,6 +91,7 @@ interface Store {
   sessions: TestSession[];
   addSession: (s: TestSession) => void;
   updateSession: (id: string, patch: Partial<TestSession>) => void;
+  deleteSession: (id: string) => void;
 
   // Materials
   materials: Material[];
@@ -108,6 +130,8 @@ export const useStore = create<Store>()(
             sess.id === id ? { ...sess, ...patch } : sess
           ),
         })),
+      deleteSession: (id) =>
+        set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) })),
 
       materials: [],
       addMaterial: (m) => set((s) => ({ materials: [...s.materials, m] })),

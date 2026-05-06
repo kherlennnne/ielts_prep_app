@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Plus, Trash2, ChevronRight, FileText, Headphones, PenLine, Upload, Type, Image as ImageIcon, X } from "lucide-react";
-import { useStore, Material, Question } from "@/lib/store";
+import { Plus, Trash2, ChevronRight, FileText, Headphones, PenLine, Upload, Type, Image as ImageIcon, X, ChevronDown, ChevronUp, Youtube, Pencil } from "lucide-react";
+import { useStore, Material, Question, Section, QuestionGroup } from "@/lib/store";
+import { getYouTubeId, parseTimestamp } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -16,31 +17,99 @@ const TYPE_COLORS = {
   writing: "bg-green-50 text-green-600 border-green-100",
 };
 
+interface FormGroup {
+  id: string;
+  instruction: string;
+  rawQuestions: string;
+  rawAnswers: string;
+  questionImage?: string;
+}
+
+interface FormSection {
+  id: string;
+  title: string;
+  content: string;
+  passageMode: "text" | "image";
+  passageImage?: string;
+  youtubeUrl: string;
+  youtubeStart: string;
+  youtubeEnd: string;
+  groups: FormGroup[];
+  collapsed: boolean;
+}
+
+const defaultGroup = (): FormGroup => ({
+  id: generateId(), instruction: "", rawQuestions: "", rawAnswers: "", questionImage: undefined,
+});
+
+const defaultSection = (): FormSection => ({
+  id: generateId(), title: "", content: "", passageMode: "text",
+  passageImage: undefined, youtubeUrl: "", youtubeStart: "0:00", youtubeEnd: "",
+  groups: [defaultGroup()], collapsed: false,
+});
+
+interface ParsedData {
+  sections: Section[];
+  questions: Question[];
+  answerKey: Record<string, string>;
+}
+
+function secsToTimestamp(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function groupToForm(grp: QuestionGroup, answerKey: Record<string, string>): FormGroup {
+  const rawQuestions = grp.questions.map(q => {
+    let line = `${q.number}. ${q.text}`;
+    if (q.options) line += "\n" + q.options.map((o, i) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+    return line;
+  }).join("\n\n");
+  const rawAnswers = grp.questions.map(q => `${q.number}. ${answerKey[q.id] ?? ""}`).join("\n");
+  return { id: grp.id, instruction: grp.instruction ?? "", rawQuestions, rawAnswers, questionImage: grp.questionImage };
+}
+
+function materialToForm(m: Material): { title: string; type: Material["type"]; duration: number; sections: FormSection[] } {
+  const sections: FormSection[] = (m.sections?.length ? m.sections : [{
+    id: generateId(), title: undefined, content: m.content, passageImage: m.passageImage,
+    youtubeUrl: undefined, youtubeStart: undefined, youtubeEnd: undefined,
+    groups: [{ id: generateId(), instruction: undefined, questions: m.questions, questionImage: undefined }],
+  }]).map(sec => ({
+    id: sec.id,
+    title: sec.title ?? "",
+    content: sec.content ?? "",
+    passageMode: sec.passageImage ? "image" as const : "text" as const,
+    passageImage: sec.passageImage,
+    youtubeUrl: sec.youtubeUrl ?? "",
+    youtubeStart: sec.youtubeStart != null ? secsToTimestamp(sec.youtubeStart) : "0:00",
+    youtubeEnd: sec.youtubeEnd != null ? secsToTimestamp(sec.youtubeEnd) : "",
+    groups: sec.groups.map(g => groupToForm(g, m.answerKey)),
+    collapsed: false,
+  }));
+  return { title: m.title, type: m.type, duration: m.duration ?? 60, sections };
+}
+
 export default function MaterialsPage() {
-  const { materials, addMaterial, deleteMaterial } = useStore();
+  const { materials, addMaterial, deleteMaterial, updateMaterial } = useStore();
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({
-    title: "", type: "reading" as Material["type"],
-    content: "", rawQuestions: "", rawAnswers: "",
-    passageMode: "text" as "text" | "image",
-    passageImage: undefined as string | undefined,
-  });
-  const [parsed, setParsed] = useState<{ questions: Question[]; answerKey: Record<string, string> } | null>(null);
+  const [form, setForm] = useState({ title: "", type: "reading" as Material["type"], duration: 60, sections: [defaultSection()] });
+  const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [parseError, setParseError] = useState("");
 
-  function parseQuestions(raw: string): Question[] {
+  function parseQuestions(raw: string, startNumber: number): Question[] {
     return raw.trim().split("\n\n").filter(Boolean).map((block, i) => {
       const lines = block.trim().split("\n");
       const firstLine = lines[0].replace(/^\d+[\.\)]\s*/, "");
       const opts = lines.slice(1).filter(l => /^[A-D][\.\)]/i.test(l.trim()));
       return {
-        id: generateId(), number: i + 1,
+        id: generateId(), number: startNumber + i,
         type: opts.length ? "mcq" : "short",
         text: firstLine,
         options: opts.length ? opts.map(o => o.replace(/^[A-D][\.\)]\s*/i, "")) : undefined,
-        section: undefined,
       };
     });
   }
@@ -57,41 +126,111 @@ export default function MaterialsPage() {
   function handleParse() {
     setParseError("");
     try {
-      const questions = parseQuestions(form.rawQuestions);
-      if (!questions.length) throw new Error("No questions found");
-      const answerKey = parseAnswers(form.rawAnswers, questions);
-      setParsed({ questions, answerKey });
+      let qNumber = 1;
+      const sections: Section[] = [];
+      const allQuestions: Question[] = [];
+      const allAnswerKey: Record<string, string> = {};
+
+      for (const fs of form.sections) {
+        const groups: QuestionGroup[] = [];
+        for (const fg of fs.groups) {
+          if (!fg.rawQuestions.trim()) continue;
+          const questions = parseQuestions(fg.rawQuestions, qNumber);
+          const answerKey = parseAnswers(fg.rawAnswers, questions);
+          groups.push({ id: fg.id, instruction: fg.instruction || undefined, questionImage: fg.questionImage, questions });
+          allQuestions.push(...questions);
+          Object.assign(allAnswerKey, answerKey);
+          qNumber += questions.length;
+        }
+        sections.push({
+          id: fs.id, title: fs.title || undefined,
+          content: fs.content || undefined, passageImage: fs.passageImage,
+          youtubeUrl: fs.youtubeUrl || undefined,
+          youtubeStart: fs.youtubeUrl ? parseTimestamp(fs.youtubeStart) : undefined,
+          youtubeEnd: fs.youtubeUrl && fs.youtubeEnd ? parseTimestamp(fs.youtubeEnd) : undefined,
+          groups,
+        });
+      }
+
+      if (!allQuestions.length) throw new Error("No questions found — paste questions into at least one group");
+      setParsed({ sections, questions: allQuestions, answerKey: allAnswerKey });
       setStep(3);
     } catch (e: unknown) {
       setParseError(e instanceof Error ? e.message : "Parse error");
     }
   }
 
-  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setForm(f => ({ ...f, passageImage: ev.target?.result as string }));
-    reader.readAsDataURL(file);
+  function handleEdit(m: Material) {
+    setForm(materialToForm(m));
+    setEditingId(m.id);
+    setStep(1);
+    setParsed(null);
+    setShowAdd(true);
   }
 
   function handleSave() {
     if (!parsed) return;
-    addMaterial({
-      id: generateId(), title: form.title, type: form.type,
-      content: form.content, questions: parsed.questions,
-      answerKey: parsed.answerKey, createdAt: new Date().toISOString(),
-      passageImage: form.passageImage,
-    });
-    setShowAdd(false);
-    setStep(1);
-    setForm({ title: "", type: "reading", content: "", rawQuestions: "", rawAnswers: "", passageMode: "text", passageImage: undefined });
-    setParsed(null);
+    const data = {
+      title: form.title, type: form.type,
+      content: form.sections[0]?.content,
+      passageImage: form.sections[0]?.passageImage,
+      sections: parsed.sections,
+      questions: parsed.questions,
+      answerKey: parsed.answerKey,
+      duration: form.duration,
+    };
+    if (editingId) {
+      updateMaterial(editingId, data);
+    } else {
+      addMaterial({ ...data, id: generateId(), createdAt: new Date().toISOString() });
+    }
+    closeModal();
   }
+
+  function closeModal() {
+    setShowAdd(false); setEditingId(null); setStep(1); setParsed(null); setParseError("");
+    setForm({ title: "", type: "reading", duration: 60, sections: [defaultSection()] });
+  }
+
+  // Section helpers
+  const updateSection = (sid: string, patch: Partial<FormSection>) =>
+    setForm(f => ({ ...f, sections: f.sections.map(s => s.id === sid ? { ...s, ...patch } : s) }));
+
+  const removeSection = (sid: string) =>
+    setForm(f => ({ ...f, sections: f.sections.filter(s => s.id !== sid) }));
+
+  const addGroup = (sid: string) =>
+    setForm(f => ({ ...f, sections: f.sections.map(s => s.id === sid ? { ...s, groups: [...s.groups, defaultGroup()] } : s) }));
+
+  const removeGroup = (sid: string, gid: string) =>
+    setForm(f => ({ ...f, sections: f.sections.map(s => s.id === sid ? { ...s, groups: s.groups.filter(g => g.id !== gid) } : s) }));
+
+  const updateGroup = (sid: string, gid: string, patch: Partial<FormGroup>) =>
+    setForm(f => ({ ...f, sections: f.sections.map(s => s.id === sid ? { ...s, groups: s.groups.map(g => g.id === gid ? { ...g, ...patch } : g) } : s) }));
+
+  function handleImageUpload(sid: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => updateSection(sid, { passageImage: ev.target?.result as string, passageMode: "image" });
+    reader.readAsDataURL(file);
+  }
+
+  function handleGroupImageUpload(sid: string, gid: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => updateGroup(sid, gid, { questionImage: ev.target?.result as string });
+    reader.readAsDataURL(file);
+  }
+
+  const canProceed = form.title && form.sections.some(s =>
+    s.groups.some(g => g.rawQuestions.trim())
+  );
 
   return (
     <div className="min-h-screen">
-      <PageHeader title="Materials" subtitle="Add your practice tests"
+      <PageHeader title="Materials" subtitle="Your practice tests"
         action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Add</Button>} />
 
       <div className="px-4 lg:px-8">
@@ -106,6 +245,7 @@ export default function MaterialsPage() {
           <div className="space-y-3">
             {materials.map(m => {
               const Icon = TYPE_ICONS[m.type];
+              const sectionCount = m.sections?.length ?? 0;
               return (
                 <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
                   <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
@@ -113,12 +253,18 @@ export default function MaterialsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm">{m.title}</p>
-                    <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+                    <p className="text-xs text-gray-500 capitalize">
+                      {m.type} · {m.questions.length} questions{sectionCount > 1 ? ` · ${sectionCount} passages` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button size="sm" onClick={() => router.push(`/test?material=${m.id}`)}>
                       Start <ChevronRight size={13} />
                     </Button>
+                    <button onClick={() => handleEdit(m)}
+                      className="p-2 rounded-lg hover:bg-accent-lightest text-gray-400 hover:text-accent-darker transition-colors">
+                      <Pencil size={15} />
+                    </button>
                     <button onClick={() => deleteMaterial(m.id)}
                       className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                       <Trash2 size={15} />
@@ -131,10 +277,10 @@ export default function MaterialsPage() {
         )}
       </div>
 
-      <Modal open={showAdd} onClose={() => { setShowAdd(false); setStep(1); setParsed(null); setParseError(""); }} title="Add Material" className="sm:max-w-2xl">
-        {/* Step indicator */}
+      <Modal open={showAdd} onClose={closeModal} title={editingId ? "Edit Material" : "Add Material"} className="sm:max-w-2xl">
+        {/* Steps */}
         <div className="flex items-center gap-2 mb-5">
-          {["Info", "Questions", "Review"].map((s, i) => (
+          {["Info", "Sections & Questions", "Review"].map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div className={cn("w-6 h-6 rounded-full text-xs flex items-center justify-center font-semibold",
                 step > i + 1 ? "bg-green-500 text-white" : step === i + 1 ? "bg-accent text-white" : "bg-gray-100 text-gray-400")}>
@@ -146,12 +292,13 @@ export default function MaterialsPage() {
           ))}
         </div>
 
+        {/* Step 1: Info */}
         {step === 1 && (
           <div className="space-y-4">
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Title</label>
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Cambridge IELTS 17 – Test 1"
+                placeholder="Cambridge IELTS 17 – Test 1 Reading"
                 className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all" />
             </div>
             <div>
@@ -170,101 +317,245 @@ export default function MaterialsPage() {
               </div>
             </div>
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Passage / Audio Script</label>
-                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
-                  <button
-                    onClick={() => setForm(f => ({ ...f, passageMode: "text" }))}
-                    className={cn("px-2.5 py-1 flex items-center gap-1 transition-colors",
-                      form.passageMode === "text" ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50")}
-                  >
-                    <Type size={10} /> Text
-                  </button>
-                  <button
-                    onClick={() => setForm(f => ({ ...f, passageMode: "image" }))}
-                    className={cn("px-2.5 py-1 flex items-center gap-1 transition-colors border-l border-gray-200",
-                      form.passageMode === "image" ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50")}
-                  >
-                    <ImageIcon size={10} /> Image
-                  </button>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Timer</label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs">
+                  {[20, 30, 40, 60].map(min => (
+                    <button key={min} onClick={() => setForm(f => ({ ...f, duration: min }))}
+                      className={cn("px-3 py-2 font-medium transition-colors",
+                        form.duration === min ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50 border-l border-gray-200 first:border-l-0")}>
+                      {min}m
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 flex-1">
+                  <input
+                    type="number" min={1} max={300}
+                    value={form.duration}
+                    onChange={e => setForm(f => ({ ...f, duration: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all text-center"
+                  />
+                  <span className="text-xs text-gray-400 whitespace-nowrap">min</span>
                 </div>
               </div>
-              {form.passageMode === "text" ? (
-                <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                  rows={5} placeholder="Paste the reading passage or audio transcript here..."
-                  className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
-              ) : form.passageImage ? (
-                <div className="relative rounded-xl overflow-hidden border border-gray-200">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={form.passageImage} alt="Passage" className="w-full" />
-                  <button
-                    onClick={() => setForm(f => ({ ...f, passageImage: undefined }))}
-                    className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors"
-                  >
-                    <X size={13} className="text-gray-500" />
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-accent hover:bg-accent-lightest transition-all group">
-                  <Upload size={22} className="text-gray-300 group-hover:text-accent mb-2 transition-colors" />
-                  <p className="text-sm font-medium text-gray-500 group-hover:text-accent-darker">Upload passage image</p>
-                  <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WebP</p>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                </label>
-              )}
             </div>
-            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.title || (!form.content && !form.passageImage)}>Next: Add Questions</Button>
+            <Button className="w-full" onClick={() => setStep(2)} disabled={!form.title}>
+              Next: Add Passages & Questions
+            </Button>
           </div>
         )}
 
+        {/* Step 2: Sections */}
         {step === 2 && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Questions</label>
-              <p className="text-xs text-gray-400 mt-0.5 mb-1.5">Separate questions with a blank line. For MCQ, add options on new lines starting with A) B) C) D)</p>
-              <textarea value={form.rawQuestions} onChange={e => setForm(f => ({ ...f, rawQuestions: e.target.value }))}
-                rows={8} placeholder={"1. What is the main purpose of the article?\nA) To inform\nB) To persuade\nC) To entertain\nD) To describe\n\n2. According to the passage, ..."}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm font-mono outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Answer Key</label>
-              <p className="text-xs text-gray-400 mt-0.5 mb-1.5">One answer per line matching question order</p>
-              <textarea value={form.rawAnswers} onChange={e => setForm(f => ({ ...f, rawAnswers: e.target.value }))}
-                rows={4} placeholder={"1. A\n2. TRUE\n3. economic factors"}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm font-mono outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
-            </div>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {form.sections.map((sec, si) => (
+              <div key={sec.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                {/* Section header */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200">
+                  <button onClick={() => updateSection(sec.id, { collapsed: !sec.collapsed })}
+                    className="text-gray-400 hover:text-gray-600 transition-colors">
+                    {sec.collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                  </button>
+                  <input
+                    value={sec.title}
+                    onChange={e => updateSection(sec.id, { title: e.target.value })}
+                    placeholder={`Passage ${si + 1} title (optional)`}
+                    className="flex-1 bg-transparent text-sm font-medium text-gray-800 outline-none placeholder:text-gray-400"
+                  />
+                  {form.sections.length > 1 && (
+                    <button onClick={() => removeSection(sec.id)}
+                      className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {!sec.collapsed && (
+                  <div className="p-4 space-y-4">
+                    {/* YouTube (listening only) */}
+                    {form.type === "listening" && (
+                      <div>
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                          <Youtube size={12} /> Audio / Video
+                        </label>
+                        <input
+                          value={sec.youtubeUrl}
+                          onChange={e => updateSection(sec.id, { youtubeUrl: e.target.value })}
+                          placeholder="YouTube URL (e.g. https://youtu.be/abc123)"
+                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent transition-all mb-2"
+                        />
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-1">
+                            <span className="text-xs text-gray-400 whitespace-nowrap">Start</span>
+                            <input
+                              value={sec.youtubeStart}
+                              onChange={e => updateSection(sec.id, { youtubeStart: e.target.value })}
+                              placeholder="0:00"
+                              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent transition-all text-center"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-1">
+                            <span className="text-xs text-gray-400 whitespace-nowrap">End</span>
+                            <input
+                              value={sec.youtubeEnd}
+                              onChange={e => updateSection(sec.id, { youtubeEnd: e.target.value })}
+                              placeholder="optional"
+                              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent transition-all text-center"
+                            />
+                          </div>
+                        </div>
+                        {sec.youtubeUrl && !getYouTubeId(sec.youtubeUrl) && (
+                          <p className="text-xs text-red-500 mt-1">Invalid YouTube URL</p>
+                        )}
+                        {sec.youtubeUrl && getYouTubeId(sec.youtubeUrl) && (
+                          <p className="text-xs text-green-600 mt-1">✓ Valid — starts at {sec.youtubeStart}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Passage */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transcript / Passage</label>
+                        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                          <button onClick={() => updateSection(sec.id, { passageMode: "text" })}
+                            className={cn("px-2.5 py-1 flex items-center gap-1 transition-colors",
+                              sec.passageMode === "text" ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50")}>
+                            <Type size={10} /> Text
+                          </button>
+                          <button onClick={() => updateSection(sec.id, { passageMode: "image" })}
+                            className={cn("px-2.5 py-1 flex items-center gap-1 transition-colors border-l border-gray-200",
+                              sec.passageMode === "image" ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-50")}>
+                            <ImageIcon size={10} /> Image
+                          </button>
+                        </div>
+                      </div>
+                      {sec.passageMode === "text" ? (
+                        <textarea value={sec.content} onChange={e => updateSection(sec.id, { content: e.target.value })}
+                          rows={4} placeholder="Paste the reading passage or audio transcript..."
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
+                      ) : sec.passageImage ? (
+                        <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={sec.passageImage} alt="Passage" className="w-full" />
+                          <button onClick={() => updateSection(sec.id, { passageImage: undefined })}
+                            className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors">
+                            <X size={13} className="text-gray-500" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-accent hover:bg-accent-lightest transition-all group">
+                          <Upload size={20} className="text-gray-300 group-hover:text-accent mb-1.5 transition-colors" />
+                          <p className="text-xs font-medium text-gray-500 group-hover:text-accent-darker">Upload passage image</p>
+                          <input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(sec.id, e)} />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Question Groups */}
+                    <div className="space-y-3">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question Groups</label>
+                      {sec.groups.map((grp, gi) => (
+                        <div key={grp.id} className="bg-gray-50 rounded-xl p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-gray-500">Group {gi + 1}</span>
+                            {sec.groups.length > 1 && (
+                              <button onClick={() => removeGroup(sec.id, grp.id)}
+                                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            value={grp.instruction}
+                            onChange={e => updateGroup(sec.id, grp.id, { instruction: e.target.value })}
+                            placeholder="Instructions (e.g. Questions 1–7: Choose TRUE, FALSE or NOT GIVEN)"
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent transition-all bg-white"
+                          />
+                          {form.type === "listening" && (
+                            grp.questionImage ? (
+                              <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={grp.questionImage} alt="Diagram" className="w-full" />
+                                <button onClick={() => updateGroup(sec.id, grp.id, { questionImage: undefined })}
+                                  className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors">
+                                  <X size={13} className="text-gray-500" />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-200 cursor-pointer hover:border-accent hover:bg-accent-lightest transition-all text-xs text-gray-400 hover:text-accent-darker group">
+                                <Upload size={12} className="flex-shrink-0" />
+                                Upload diagram / map / table (optional)
+                                <input type="file" accept="image/*" className="hidden" onChange={e => handleGroupImageUpload(sec.id, grp.id, e)} />
+                              </label>
+                            )
+                          )}
+                          <textarea value={grp.rawQuestions} onChange={e => updateGroup(sec.id, grp.id, { rawQuestions: e.target.value })}
+                            rows={4} placeholder={"1. What is the main purpose?\nA) To inform\nB) To persuade\n\n2. According to the passage..."}
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono outline-none focus:border-accent transition-all resize-none bg-white" />
+                          <textarea value={grp.rawAnswers} onChange={e => updateGroup(sec.id, grp.id, { rawAnswers: e.target.value })}
+                            rows={2} placeholder={"1. A\n2. TRUE\n3. economic factors"}
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-mono outline-none focus:border-accent transition-all resize-none bg-white" />
+                        </div>
+                      ))}
+                      <button onClick={() => addGroup(sec.id)}
+                        className="w-full py-2 rounded-xl border border-dashed border-gray-300 text-xs text-gray-500 hover:border-accent hover:text-accent-darker transition-colors flex items-center justify-center gap-1.5">
+                        <Plus size={12} /> Add Question Group
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <button onClick={() => setForm(f => ({ ...f, sections: [...f.sections, defaultSection()] }))}
+              className="w-full py-2.5 rounded-xl border border-dashed border-gray-300 text-xs text-gray-500 hover:border-accent hover:text-accent-darker transition-colors flex items-center justify-center gap-1.5">
+              <Plus size={12} /> Add Passage / Section
+            </button>
+
             {parseError && <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{parseError}</p>}
-            <div className="flex gap-2">
+
+            <div className="flex gap-2 pt-1">
               <Button variant="secondary" onClick={() => setStep(1)}>Back</Button>
-              <Button className="flex-1" onClick={handleParse} disabled={!form.rawQuestions}>Parse & Preview</Button>
+              <Button className="flex-1" onClick={handleParse} disabled={!canProceed}>Parse & Preview</Button>
             </div>
           </div>
         )}
 
+        {/* Step 3: Review */}
         {step === 3 && parsed && (
           <div className="space-y-4">
             <div className="bg-accent-lightest rounded-xl p-3 text-sm text-accent-darker font-medium">
-              ✓ Parsed {parsed.questions.length} questions with {Object.keys(parsed.answerKey).length} answers
+              ✓ {parsed.questions.length} questions across {parsed.sections.length} passage{parsed.sections.length !== 1 ? "s" : ""}
             </div>
-            <div className="max-h-48 overflow-y-auto space-y-2">
-              {parsed.questions.map(q => (
-                <div key={q.id} className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-gray-500 mb-0.5">Q{q.number} · {q.type}</p>
-                  <p className="text-sm text-gray-800">{q.text}</p>
-                  {q.options && (
-                    <div className="mt-1.5 space-y-0.5">
-                      {q.options.map((o, i) => (
-                        <p key={i} className="text-xs text-gray-500">{String.fromCharCode(65 + i)}) {o}</p>
+            <div className="max-h-52 overflow-y-auto space-y-2">
+              {parsed.sections.map((sec, si) => (
+                <div key={sec.id}>
+                  <p className="text-xs font-semibold text-gray-500 mb-1.5">
+                    Passage {si + 1}{sec.title ? `: ${sec.title}` : ""}
+                  </p>
+                  {sec.groups.map((grp, gi) => (
+                    <div key={grp.id} className="bg-gray-50 rounded-xl p-3 mb-1.5">
+                      {grp.instruction && (
+                        <p className="text-[11px] text-accent-darker font-medium mb-1.5 italic">{grp.instruction}</p>
+                      )}
+                      <p className="text-[11px] text-gray-500">{grp.questions.length} questions (Q{grp.questions[0]?.number}–Q{grp.questions[grp.questions.length - 1]?.number})</p>
+                      {grp.questions.slice(0, 2).map(q => (
+                        <div key={q.id} className="mt-1">
+                          <p className="text-xs text-gray-700">Q{q.number}. {q.text.slice(0, 60)}{q.text.length > 60 ? "…" : ""}</p>
+                        </div>
                       ))}
+                      {grp.questions.length > 2 && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">+{grp.questions.length - 2} more</p>
+                      )}
                     </div>
-                  )}
-                  <p className="text-xs text-green-600 font-medium mt-1.5">Answer: {parsed.answerKey[q.id] || "–"}</p>
+                  ))}
                 </div>
               ))}
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setStep(2)}>Back</Button>
-              <Button className="flex-1" onClick={handleSave}>Save Material</Button>
+              <Button className="flex-1" onClick={handleSave}>{editingId ? "Update Material" : "Save Material"}</Button>
             </div>
           </div>
         )}

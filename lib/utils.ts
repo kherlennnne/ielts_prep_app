@@ -1,6 +1,26 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+export function getYouTubeId(url: string): string | null {
+  const patterns = [
+    /youtube\.com\/watch\?v=([^&\s]+)/,
+    /youtu\.be\/([^?&\s]+)/,
+    /youtube\.com\/embed\/([^?&\s]+)/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+export function parseTimestamp(ts: string): number {
+  const parts = ts.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parseInt(ts) || 0;
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -15,6 +35,28 @@ export function formatTime(seconds: number) {
   const s = seconds % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function expandOptionalParens(text: string): string[] {
+  const match = text.match(/\(([^)]+)\)/);
+  if (!match) return [text];
+  const before = text.slice(0, match.index!);
+  const inside = match[1];
+  const after = text.slice(match.index! + match[0].length);
+  const withGroup = expandOptionalParens((before + inside + after).replace(/\s+/g, " "));
+  const withoutGroup = expandOptionalParens((before + after).replace(/\s+/g, " ").trim());
+  return Array.from(new Set([...withGroup, ...withoutGroup]));
+}
+
+export function checkAnswer(given: string, expected: string): boolean {
+  const g = given.toLowerCase().trim().replace(/\s+/g, " ");
+  const slashAlts = expected.toLowerCase().split("/").map(s => s.trim());
+  for (const alt of slashAlts) {
+    for (const v of expandOptionalParens(alt)) {
+      if (v.trim().replace(/\s+/g, " ") === g) return true;
+    }
+  }
+  return false;
 }
 
 export function getBandScore(correct: number, total: number, type: "listening" | "reading") {
