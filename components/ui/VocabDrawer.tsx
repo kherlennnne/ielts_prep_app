@@ -62,7 +62,7 @@ export function VocabDrawer({ open, onClose, materialId }: VocabDrawerProps) {
                 </div>
 
                 <p className="text-xs text-gray-500 italic leading-relaxed mb-2.5">
-                  "{v.context.length > 120 ? v.context.slice(0, 120) + "…" : v.context}"
+                  &ldquo;{v.context.length > 120 ? v.context.slice(0, 120) + "…" : v.context}&rdquo;
                 </p>
 
                 {editingId === v.id ? (

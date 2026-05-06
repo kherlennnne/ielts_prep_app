@@ -38,7 +38,7 @@ function extractContext(text: string, word: string): string {
 
 function HighlightedText({ text, highlights }: { text: string; highlights: string[] }) {
   if (!highlights.length || !text) return <span className="whitespace-pre-wrap">{text}</span>;
-  const unique = [...new Set(highlights.map(h => h.toLowerCase()))];
+  const unique = Array.from(new Set(highlights.map(h => h.toLowerCase())));
   const escaped = unique.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const regex = new RegExp(`(${escaped.join("|")})`, "gi");
   const parts = text.split(regex);
@@ -330,6 +330,7 @@ export default function TestInner() {
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-4 lg:p-6">
                 {material.passageImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={material.passageImage} alt="Passage" className="w-full rounded-xl border border-gray-100" />
                 ) : material.content ? (
                   <div onMouseUp={handleMouseUp} className="text-[14px] leading-relaxed text-gray-700 cursor-text">
@@ -420,7 +421,7 @@ export default function TestInner() {
               transform: "translate(-50%, calc(-100% - 10px))",
             }}
           >
-            <span className="max-w-[130px] truncate opacity-60">"{selectionInfo.word}"</span>
+            <span className="max-w-[130px] truncate opacity-60">&ldquo;{selectionInfo.word}&rdquo;</span>
             <button
               onMouseDown={e => e.preventDefault()}
               onClick={handleSaveVocab}

@@ -195,6 +195,7 @@ export default function MaterialsPage() {
                   className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
               ) : form.passageImage ? (
                 <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={form.passageImage} alt="Passage" className="w-full" />
                   <button
                     onClick={() => setForm(f => ({ ...f, passageImage: undefined }))}

@@ -48,7 +48,7 @@ export default function VocabPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
-            <p className="text-sm">No words match "{search}"</p>
+            <p className="text-sm">No words match &ldquo;{search}&rdquo;</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -67,7 +67,7 @@ export default function VocabPage() {
                   </div>
 
                   <p className="text-xs text-gray-500 italic leading-relaxed">
-                    "{v.context.length > 140 ? v.context.slice(0, 140) + "…" : v.context}"
+                    &ldquo;{v.context.length > 140 ? v.context.slice(0, 140) + "…" : v.context}&rdquo;
                   </p>
 
                   {source && (
