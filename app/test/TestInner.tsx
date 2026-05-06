@@ -308,10 +308,10 @@ export default function TestInner() {
       ? `Q${firstQ.number}–Q${lastQ.number}`
       : firstQ ? `Q${firstQ.number}` : "";
 
-    function groupIdxForQuestion(qId: string): number {
+    const groupIdxForQuestion = (qId: string): number => {
       const idx = allGroups.findIndex(({ group }) => group.questions.some(q => q.id === qId));
       return idx === -1 ? 0 : idx;
-    }
+    };
 
     return (
       <div className="min-h-screen flex flex-col">
