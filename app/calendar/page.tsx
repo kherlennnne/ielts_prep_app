@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { generateId, EVENT_DOT, EVENT_COLORS } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/lib/useUser";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TYPES: EventType[] = ["study", "test", "review", "break"];
 
 export default function CalendarPage() {
   const { events, addEvent, updateEvent, deleteEvent } = useStore();
+  const { isRestricted } = useUser();
   const [current, setCurrent] = useState(new Date());
   const [selected, setSelected] = useState(new Date());
   const [showAdd, setShowAdd] = useState(false);
@@ -122,12 +124,14 @@ export default function CalendarPage() {
                   </div>
                   {ev.completed ? <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" /> :
                     <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" />}
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteEvent(ev.id); }}
-                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {!isRestricted && (
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteEvent(ev.id); }}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -194,9 +198,11 @@ export default function CalendarPage() {
                 onClick={() => { updateEvent(showDetail.id, { completed: !showDetail.completed }); setShowDetail(null); }}>
                 {showDetail.completed ? "Mark Incomplete" : "Mark Complete"}
               </Button>
-              <Button variant="danger" size="md" onClick={() => { deleteEvent(showDetail.id); setShowDetail(null); }}>
-                <Trash2 size={15} />
-              </Button>
+              {!isRestricted && (
+                <Button variant="danger" size="md" onClick={() => { deleteEvent(showDetail.id); setShowDetail(null); }}>
+                  <Trash2 size={15} />
+                </Button>
+              )}
             </div>
           </div>
         </Modal>

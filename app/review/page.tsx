@@ -5,9 +5,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { formatTime, getBandScore, checkAnswer } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, GraduationCap, StickyNote, Trash2 } from "lucide-react";
+import { useUser } from "@/lib/useUser";
 
 export default function ReviewPage() {
   const { sessions, materials, updateMaterial, deleteSession } = useStore();
+  const { isRestricted } = useUser();
   const completed = sessions.filter(s => s.completed).sort((a, b) => b.date.localeCompare(a.date));
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "listening" | "reading" | "writing">("all");
@@ -84,12 +86,14 @@ export default function ReviewPage() {
                     </div>
                     {isExpanded ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
                   </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteSession(session.id); if (expanded === session.id) setExpanded(null); }}
-                    className="absolute top-3 right-10 p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {!isRestricted && (
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteSession(session.id); if (expanded === session.id) setExpanded(null); }}
+                      className="absolute top-3 right-10 p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
 
                   {isExpanded && (
                     <div className="border-t border-gray-100 p-4 space-y-4">
