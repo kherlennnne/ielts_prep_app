@@ -41,6 +41,13 @@ h1 {
 }
 .timer-pulse { animation: timerPulse 1s ease-in-out infinite; }
 
+/* Sync OK badge fade out */
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* Smooth transitions for mobile nav */
 .nav-slide {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);

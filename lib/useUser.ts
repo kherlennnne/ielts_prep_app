@@ -16,5 +16,6 @@ export function useUser() {
   return {
     username,
     isRestricted: username !== null && RESTRICTED_USERS.includes(username),
+    isCutie: username === "cutie",
   };
 }

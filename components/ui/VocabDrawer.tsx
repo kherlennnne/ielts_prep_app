@@ -1,23 +1,42 @@
 "use client";
 import { useState } from "react";
-import { X, Trash2, BookOpen, StickyNote } from "lucide-react";
+import { X, Trash2, BookOpen, StickyNote, Plus } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { generateId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 interface VocabDrawerProps {
   open: boolean;
   onClose: () => void;
   materialId?: string;
+  allowAdd?: boolean;
 }
 
-export function VocabDrawer({ open, onClose, materialId }: VocabDrawerProps) {
-  const { vocab, deleteVocab, updateVocab } = useStore();
+export function VocabDrawer({ open, onClose, materialId, allowAdd }: VocabDrawerProps) {
+  const { vocab, deleteVocab, updateVocab, addVocab } = useStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newWord, setNewWord] = useState("");
+  const [newDef, setNewDef] = useState("");
 
-  const words = materialId
-    ? vocab.filter(v => v.materialId === materialId)
-    : vocab;
+  const words = materialId ? vocab.filter(v => v.materialId === materialId) : vocab;
+
+  function handleAdd() {
+    const w = newWord.trim();
+    if (!w) return;
+    addVocab({
+      id: generateId(),
+      word: w,
+      context: w,
+      materialId,
+      note: newDef.trim() || undefined,
+      savedAt: new Date().toISOString(),
+    });
+    setNewWord("");
+    setNewDef("");
+    setShowAddForm(false);
+  }
 
   return (
     <>
@@ -26,6 +45,7 @@ export function VocabDrawer({ open, onClose, materialId }: VocabDrawerProps) {
         "fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out",
         open ? "translate-x-0" : "translate-x-full"
       )}>
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
             <BookOpen size={15} className="text-accent" />
@@ -36,17 +56,70 @@ export function VocabDrawer({ open, onClose, materialId }: VocabDrawerProps) {
               </span>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X size={15} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-1">
+            {allowAdd && (
+              <button
+                onClick={() => setShowAddForm(v => !v)}
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors text-sm",
+                  showAddForm ? "bg-accent text-white" : "hover:bg-gray-100 text-gray-500"
+                )}
+                title="Add word"
+              >
+                <Plus size={15} />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <X size={15} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
+        {/* Add form */}
+        {allowAdd && showAddForm && (
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 space-y-2 flex-shrink-0">
+            <input
+              value={newWord}
+              onChange={e => setNewWord(e.target.value)}
+              placeholder="Word or phrase..."
+              autoFocus
+              onKeyDown={e => e.key === "Enter" && handleAdd()}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-accent transition-colors bg-white"
+            />
+            <textarea
+              value={newDef}
+              onChange={e => setNewDef(e.target.value)}
+              placeholder="Definition (optional)..."
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent resize-none transition-colors bg-white"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleAdd}
+                disabled={!newWord.trim()}
+                className="flex-1 bg-accent text-white text-xs font-semibold py-2 rounded-lg disabled:opacity-40 transition-colors hover:bg-accent-dark"
+              >
+                Add Word
+              </button>
+              <button
+                onClick={() => { setShowAddForm(false); setNewWord(""); setNewDef(""); }}
+                className="text-xs text-gray-500 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Word list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
           {words.length === 0 ? (
             <div className="text-center py-16">
               <BookOpen size={32} className="text-gray-200 mx-auto mb-3" />
               <p className="text-sm text-gray-400 font-medium">No words saved yet</p>
-              <p className="text-xs text-gray-300 mt-1">Select text in the passage to save words</p>
+              <p className="text-xs text-gray-300 mt-1">
+                {allowAdd ? "Add words above or select text in the passage" : "Select text in the passage to save words"}
+              </p>
             </div>
           ) : (
             [...words].reverse().map(v => (
@@ -61,9 +134,11 @@ export function VocabDrawer({ open, onClose, materialId }: VocabDrawerProps) {
                   </button>
                 </div>
 
-                <p className="text-xs text-gray-500 italic leading-relaxed mb-2.5">
-                  &ldquo;{v.context.length > 120 ? v.context.slice(0, 120) + "…" : v.context}&rdquo;
-                </p>
+                {v.context && v.context !== v.word && (
+                  <p className="text-xs text-gray-500 italic leading-relaxed mb-2.5">
+                    &ldquo;{v.context.length > 120 ? v.context.slice(0, 120) + "…" : v.context}&rdquo;
+                  </p>
+                )}
 
                 {editingId === v.id ? (
                   <div>
@@ -98,7 +173,7 @@ export function VocabDrawer({ open, onClose, materialId }: VocabDrawerProps) {
                     <StickyNote size={11} />
                     {v.note
                       ? <span className="text-gray-700 text-left">{v.note}</span>
-                      : <span>Add note or definition</span>
+                      : <span>Add definition</span>
                     }
                   </button>
                 )}

@@ -4,12 +4,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useStore, Question } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
-import { VocabDrawer } from "@/components/ui/VocabDrawer";
+import { PassageAnnotator, TextAnnotation, AnnotationColor, AnnotationToolbar } from "@/components/ui/PassageAnnotator";
 import { generateId, formatTime, getBandScore, checkAnswer, getYouTubeId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   ChevronLeft, ChevronRight, Clock, AlertTriangle, CheckCircle2, FlaskConical,
-  FileText, Headphones, PenLine, BookMarked, X,
+  FileText, Headphones, PenLine,
 } from "lucide-react";
 
 const DEFAULT_TIMES = { reading: 60, listening: 30, writing: 60 }; // minutes
@@ -20,48 +20,15 @@ const TYPE_COLORS = {
   writing: "bg-green-50 text-green-600 border-green-100",
 };
 
-function extractContext(text: string, word: string): string {
-  const idx = text.toLowerCase().indexOf(word.toLowerCase());
-  if (idx === -1) return word;
-  let start = idx;
-  let end = idx + word.length;
-  for (let i = idx - 1; i >= Math.max(0, idx - 150); i--) {
-    if (".!?\n".includes(text[i])) { start = i + 1; break; }
-    if (i === 0) start = 0;
-  }
-  for (let i = idx + word.length; i < Math.min(text.length, idx + word.length + 150); i++) {
-    if (".!?\n".includes(text[i])) { end = i + 1; break; }
-    if (i === text.length - 1) end = text.length;
-  }
-  return text.slice(start, end).trim();
-}
-
-function HighlightedText({ text, highlights }: { text: string; highlights: string[] }) {
-  if (!highlights.length || !text) return <span className="whitespace-pre-wrap">{text}</span>;
-  const unique = Array.from(new Set(highlights.map(h => h.toLowerCase())));
-  const escaped = unique.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
-  const parts = text.split(regex);
-  return (
-    <span className="whitespace-pre-wrap">
-      {parts.map((part, i) =>
-        unique.includes(part.toLowerCase())
-          ? <mark key={i} className="bg-yellow-100 text-yellow-900 rounded-sm px-0.5 not-italic">{part}</mark>
-          : <span key={i}>{part}</span>
-      )}
-    </span>
-  );
-}
-
 export default function TestInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const materialId = searchParams.get("material");
   const {
     materials, sessions, addSession, updateSession, addEvent, updateEvent,
-    vocab, addVocab,
   } = useStore();
 
+  const mockMaterials = materials.filter(m => (m.testMode ?? "mock") === "mock");
   const material = materials.find(m => m.id === materialId);
 
   const [phase, setPhase] = useState<"select" | "intro" | "active" | "done">("select");
@@ -70,49 +37,26 @@ export default function TestInner() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [sessionId, setSessionId] = useState("");
   const [showPassage, setShowPassage] = useState(true);
-  const [vocabOpen, setVocabOpen] = useState(false);
-  const [selectionInfo, setSelectionInfo] = useState<{ x: number; y: number; word: string; context: string } | null>(null);
+  const [annotations, setAnnotations] = useState<TextAnnotation[]>([]);
+  const [annToolbar, setAnnToolbar] = useState<AnnotationToolbar | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const materialVocab = vocab.filter(v => v.materialId === materialId);
+  function handleAnnotate(start: number, end: number, type: TextAnnotation["type"], color?: AnnotationColor, sid?: string) {
+    setAnnotations(prev => {
+      const kept = prev.filter(a => !(a.sectionId === sid && a.start < end && a.end > start));
+      return [...kept, { id: generateId(), start, end, type, color, sectionId: sid ?? "" }];
+    });
+    setAnnToolbar(null);
+  }
 
-  useEffect(() => {
-    if (!selectionInfo) return;
-    const handler = (e: MouseEvent) => {
-      if (!(e.target as Element).closest("[data-vocab-popup]")) setSelectionInfo(null);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [selectionInfo]);
+  function handleClearAnnotation(start: number, end: number, sid: string) {
+    setAnnotations(prev => prev.filter(a => !(a.sectionId === sid && a.start < end && a.end > start)));
+    setAnnToolbar(null);
+  }
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
-
-  const handleMouseUp = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
-    const word = selection.toString().trim();
-    if (!word || word.length < 2 || word.length > 80 || word.includes("\n")) return;
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    if (!rect.width) return;
-    const context = extractContext(material?.content ?? "", word);
-    setSelectionInfo({ x: rect.left + rect.width / 2, y: rect.top, word, context });
-  }, [material?.content]);
-
-  function handleSaveVocab() {
-    if (!selectionInfo) return;
-    addVocab({
-      id: generateId(),
-      word: selectionInfo.word,
-      context: selectionInfo.context,
-      materialId: materialId ?? undefined,
-      savedAt: new Date().toISOString(),
-    });
-    setSelectionInfo(null);
-    window.getSelection()?.removeAllRanges();
-  }
 
   function startTest() {
     if (!material) return;
@@ -200,38 +144,35 @@ export default function TestInner() {
   // ─── No material selected ────────────────────────────────────────────────────
   if (!material) {
     return (
-      <div className="min-h-screen">
-        <PageHeader title="Test Center" subtitle="Choose a material to begin" />
-        <div className="px-4 lg:px-8">
-          {materials.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
-              <FlaskConical size={36} className="text-gray-300 mx-auto mb-3" />
-              <p className="font-medium text-gray-500 mb-1">No materials yet</p>
-              <p className="text-sm text-gray-400 mb-4">Add practice materials first</p>
-              <Button onClick={() => router.push("/materials")}>Go to Materials</Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {materials.map((m) => {
-                const Icon = TYPE_ICONS[m.type];
-                return (
-                  <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
-                      <Icon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm">{m.title}</p>
-                      <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
-                    </div>
-                    <Button size="sm" onClick={() => router.push(`/test?material=${m.id}`)}>
-                      Start <ChevronRight size={13} />
-                    </Button>
+      <div className="px-4 lg:px-8">
+        {mockMaterials.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
+            <FlaskConical size={36} className="text-gray-300 mx-auto mb-3" />
+            <p className="font-medium text-gray-500 mb-1">No mock test materials yet</p>
+            <p className="text-sm text-gray-400 mb-4">Add a material and set it to Mock Test</p>
+            <Button onClick={() => router.push("/materials")}>Go to Materials</Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {mockMaterials.map((m) => {
+              const Icon = TYPE_ICONS[m.type];
+              return (
+                <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
+                    <Icon size={18} />
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">{m.title}</p>
+                    <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+                  </div>
+                  <Button size="sm" onClick={() => router.push(`/test?tab=mock&material=${m.id}`)}>
+                    Start <ChevronRight size={13} />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -331,20 +272,6 @@ export default function TestInner() {
             <span className="text-xs text-gray-500">{answered}/{totalQ} answered</span>
           </div>
           <div className="flex items-center gap-2">
-            {hasPassage && (
-              <button
-                onClick={() => setVocabOpen(true)}
-                className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                <BookMarked size={13} />
-                <span className="hidden sm:inline">Vocab</span>
-                {materialVocab.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {materialVocab.length}
-                  </span>
-                )}
-              </button>
-            )}
             <div className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-sm font-semibold",
               isWarning ? "bg-red-50 text-red-600 timer-pulse" : "bg-accent-lightest text-accent-darker"
@@ -387,9 +314,16 @@ export default function TestInner() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={passageImg} alt="Passage" className="w-full rounded-xl border border-gray-100" />
                 ) : passageContent ? (
-                  <div onMouseUp={handleMouseUp} className="text-[14px] leading-relaxed text-gray-700 cursor-text">
-                    <HighlightedText text={passageContent} highlights={materialVocab.map(v => v.word)} />
-                  </div>
+                  <PassageAnnotator
+                    text={passageContent}
+                    sectionId={currentSection?.id ?? "default"}
+                    annotations={annotations}
+                    toolbar={annToolbar}
+                    onToolbarOpen={setAnnToolbar}
+                    onToolbarClose={() => setAnnToolbar(null)}
+                    onAnnotate={handleAnnotate}
+                    onClear={handleClearAnnotation}
+                  />
                 ) : !youtubeId ? (
                   <div className="text-center py-14 text-gray-400">
                     <p className="text-sm">No passage added to this material</p>
@@ -489,36 +423,6 @@ export default function TestInner() {
           </div>
         </div>
 
-        {/* Vocab selection popup */}
-        {selectionInfo && (
-          <div
-            data-vocab-popup="true"
-            className="fixed z-50 bg-gray-900 text-white rounded-xl shadow-xl px-3 py-2 flex items-center gap-2 text-xs pointer-events-auto"
-            style={{
-              left: selectionInfo.x,
-              top: selectionInfo.y,
-              transform: "translate(-50%, calc(-100% - 10px))",
-            }}
-          >
-            <span className="max-w-[130px] truncate opacity-60">&ldquo;{selectionInfo.word}&rdquo;</span>
-            <button
-              onMouseDown={e => e.preventDefault()}
-              onClick={handleSaveVocab}
-              className="bg-accent hover:bg-accent-dark text-white px-2.5 py-1 rounded-lg font-medium transition-colors whitespace-nowrap"
-            >
-              Save word
-            </button>
-            <button
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => setSelectionInfo(null)}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <X size={12} />
-            </button>
-          </div>
-        )}
-
-        <VocabDrawer open={vocabOpen} onClose={() => setVocabOpen(false)} materialId={materialId ?? undefined} />
       </div>
     );
   }
@@ -546,15 +450,6 @@ export default function TestInner() {
             )}
             <p className="text-gray-700 font-medium mt-3">{correct}/{total} correct</p>
             <p className="text-sm text-gray-500 mt-1">{session?.timeSpent ? formatTime(session.timeSpent) : "–"} time spent</p>
-            {materialVocab.length > 0 && (
-              <button
-                onClick={() => setVocabOpen(true)}
-                className="mt-3 flex items-center gap-1.5 text-xs text-accent-darker font-medium mx-auto hover:underline"
-              >
-                <BookMarked size={13} />
-                {materialVocab.length} words saved to vocab
-              </button>
-            )}
           </div>
 
           {session?.feedback && (
@@ -569,7 +464,6 @@ export default function TestInner() {
             <Button className="flex-1" onClick={() => { setPhase("intro"); setAnswers({}); setCurrentQ(0); }}>Retry</Button>
           </div>
         </div>
-        <VocabDrawer open={vocabOpen} onClose={() => setVocabOpen(false)} materialId={materialId ?? undefined} />
       </div>
     );
   }

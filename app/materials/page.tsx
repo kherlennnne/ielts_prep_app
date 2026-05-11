@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Plus, Trash2, ChevronRight, FileText, Headphones, PenLine, Upload, Type, Image as ImageIcon, X, ChevronDown, ChevronUp, Youtube, Pencil } from "lucide-react";
-import { useStore, Material, Question, Section, QuestionGroup } from "@/lib/store";
+import { Plus, Trash2, ChevronRight, FileText, Headphones, PenLine, Upload, Type, Image as ImageIcon, X, ChevronDown, ChevronUp, Youtube, Pencil, FlaskConical, BookOpen, Download, Loader2 } from "lucide-react";
+import { useStore, Material, TestSession, CalendarEvent, Question, Section, QuestionGroup } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { getYouTubeId, parseTimestamp } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -70,7 +71,7 @@ function groupToForm(grp: QuestionGroup, answerKey: Record<string, string>): For
   return { id: grp.id, instruction: grp.instruction ?? "", rawQuestions, rawAnswers, questionImage: grp.questionImage };
 }
 
-function materialToForm(m: Material): { title: string; type: Material["type"]; duration: number; sections: FormSection[] } {
+function materialToForm(m: Material): { title: string; type: Material["type"]; testMode: Material["testMode"]; duration: number; sections: FormSection[] } {
   const sections: FormSection[] = (m.sections?.length ? m.sections : [{
     id: generateId(), title: undefined, content: m.content, passageImage: m.passageImage,
     youtubeUrl: undefined, youtubeStart: undefined, youtubeEnd: undefined,
@@ -87,18 +88,77 @@ function materialToForm(m: Material): { title: string; type: Material["type"]; d
     groups: sec.groups.map(g => groupToForm(g, m.answerKey)),
     collapsed: false,
   }));
-  return { title: m.title, type: m.type, duration: m.duration ?? 60, sections };
+  return { title: m.title, type: m.type, testMode: m.testMode ?? "mock", duration: m.duration ?? 60, sections };
 }
 
 export default function MaterialsPage() {
-  const { materials, addMaterial, deleteMaterial, updateMaterial } = useStore();
+  const { materials, addMaterial, deleteMaterial, updateMaterial, sessions, addSession, events, addEvent } = useStore();
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ title: "", type: "reading" as Material["type"], duration: 60, sections: [defaultSection()] });
+  const [form, setForm] = useState({ title: "", type: "reading" as Material["type"], testMode: "mock" as Material["testMode"], duration: 60, sections: [defaultSection()] });
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [parseError, setParseError] = useState("");
+
+  // ── Import from app_state backup ──────────────────────────────────────────
+  const [showImport, setShowImport] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importTab, setImportTab] = useState<"materials" | "sessions" | "events">("materials");
+  const [backupMaterials, setBackupMaterials] = useState<Material[]>([]);
+  const [backupSessions, setBackupSessions] = useState<TestSession[]>([]);
+  const [backupEvents, setBackupEvents] = useState<CalendarEvent[]>([]);
+  const [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+
+  async function fetchBackup() {
+    setImportLoading(true);
+    setImportError("");
+    setBackupMaterials([]);
+    setBackupSessions([]);
+    setBackupEvents([]);
+    try {
+      const { data, error } = await supabase
+        .from("app_state")
+        .select("value")
+        .eq("key", "ielts-store")
+        .single();
+      if (error || !data) throw new Error(error?.message ?? "No backup found in app_state");
+      const parsed = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+      const mats: Material[] = parsed?.state?.materials ?? [];
+      const sess: TestSession[] = parsed?.state?.sessions ?? [];
+      const evts: CalendarEvent[] = parsed?.state?.events ?? [];
+      if (!mats.length && !sess.length && !evts.length) throw new Error("No data found in backup");
+      setBackupMaterials(mats);
+      setBackupSessions(sess);
+      setBackupEvents(evts);
+    } catch (e: unknown) {
+      setImportError(e instanceof Error ? e.message : "Failed to load backup");
+    } finally {
+      setImportLoading(false);
+    }
+  }
+
+  function importMaterial(m: Material) {
+    const exists = materials.some(ex => ex.id === m.id);
+    const toAdd = exists ? { ...m, id: generateId(), createdAt: new Date().toISOString() } : m;
+    addMaterial(toAdd);
+    setImportedIds(prev => { const n = new Set(prev); n.add(m.id); return n; });
+  }
+
+  function importSession(s: TestSession) {
+    const exists = sessions.some(ex => ex.id === s.id);
+    const toAdd = exists ? { ...s, id: generateId() } : s;
+    addSession(toAdd);
+    setImportedIds(prev => { const n = new Set(prev); n.add(s.id); return n; });
+  }
+
+  function importCalendarEvent(e: CalendarEvent) {
+    const exists = events.some(ex => ex.id === e.id);
+    const toAdd = exists ? { ...e, id: generateId() } : e;
+    addEvent(toAdd);
+    setImportedIds(prev => { const n = new Set(prev); n.add(e.id); return n; });
+  }
 
   function parseQuestions(raw: string, startNumber: number): Question[] {
     return raw.trim().split("\n\n").filter(Boolean).map((block, i) => {
@@ -171,7 +231,7 @@ export default function MaterialsPage() {
   function handleSave() {
     if (!parsed) return;
     const data = {
-      title: form.title, type: form.type,
+      title: form.title, type: form.type, testMode: form.testMode,
       content: form.sections[0]?.content,
       passageImage: form.sections[0]?.passageImage,
       sections: parsed.sections,
@@ -189,7 +249,7 @@ export default function MaterialsPage() {
 
   function closeModal() {
     setShowAdd(false); setEditingId(null); setStep(1); setParsed(null); setParseError("");
-    setForm({ title: "", type: "reading", duration: 60, sections: [defaultSection()] });
+    setForm({ title: "", type: "reading", testMode: "mock", duration: 60, sections: [defaultSection()] });
   }
 
   // Section helpers
@@ -231,7 +291,19 @@ export default function MaterialsPage() {
   return (
     <div className="min-h-screen">
       <PageHeader title="Materials" subtitle="Your practice tests"
-        action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Add</Button>} />
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowImport(true); fetchBackup(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-500 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+              title="Import from old backup"
+            >
+              <Download size={13} /> Import
+            </button>
+            <Button size="sm" onClick={() => setShowAdd(true)}><Plus size={14} /> Add</Button>
+          </div>
+        }
+      />
 
       <div className="px-4 lg:px-8">
         {materials.length === 0 ? (
@@ -258,7 +330,7 @@ export default function MaterialsPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => router.push(`/test?material=${m.id}`)}>
+                    <Button size="sm" onClick={() => router.push(`/test?tab=${m.testMode ?? "mock"}&material=${m.id}`)}>
                       Start <ChevronRight size={13} />
                     </Button>
                     <button onClick={() => handleEdit(m)}
@@ -302,6 +374,37 @@ export default function MaterialsPage() {
                 className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all" />
             </div>
             <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mode</label>
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setForm(f => ({ ...f, testMode: "mock" }))}
+                  className={cn(
+                    "py-3 rounded-xl text-xs font-medium border flex flex-col items-center gap-1.5 transition-all",
+                    form.testMode === "mock"
+                      ? "bg-accent-lightest text-accent-darker border-accent/40"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                  )}
+                >
+                  <FlaskConical size={16} />
+                  Mock Test
+                  <span className="text-[10px] font-normal opacity-70">Timed, full exam conditions</span>
+                </button>
+                <button
+                  onClick={() => setForm(f => ({ ...f, testMode: "practice" }))}
+                  className={cn(
+                    "py-3 rounded-xl text-xs font-medium border flex flex-col items-center gap-1.5 transition-all",
+                    form.testMode === "practice"
+                      ? "bg-green-50 text-green-700 border-green-300"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                  )}
+                >
+                  <BookOpen size={16} />
+                  Practice Test
+                  <span className="text-[10px] font-normal opacity-70">No timer, instant feedback</span>
+                </button>
+              </div>
+            </div>
+            <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Test Type</label>
               <div className="mt-1.5 grid grid-cols-3 gap-2">
                 {(["reading", "listening", "writing"] as const).map(t => {
@@ -316,7 +419,7 @@ export default function MaterialsPage() {
                 })}
               </div>
             </div>
-            <div>
+            {form.testMode === "mock" && <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Timer</label>
               <div className="mt-1.5 flex items-center gap-2">
                 <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs">
@@ -338,7 +441,7 @@ export default function MaterialsPage() {
                   <span className="text-xs text-gray-400 whitespace-nowrap">min</span>
                 </div>
               </div>
-            </div>
+            </div>}
             <Button className="w-full" onClick={() => setStep(2)} disabled={!form.title}>
               Next: Add Passages & Questions
             </Button>
@@ -432,7 +535,7 @@ export default function MaterialsPage() {
                       </div>
                       {sec.passageMode === "text" ? (
                         <textarea value={sec.content} onChange={e => updateSection(sec.id, { content: e.target.value })}
-                          rows={4} placeholder="Paste the reading passage or audio transcript..."
+                          rows={4} placeholder={"Paste the reading passage or audio transcript...\n\nFor labelled paragraphs use [A], [B], [C] on their own line:\n[A]\nFirst paragraph text...\n[B]\nSecond paragraph text..."}
                           className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
                       ) : sec.passageImage ? (
                         <div className="relative rounded-xl overflow-hidden border border-gray-200">
@@ -472,23 +575,21 @@ export default function MaterialsPage() {
                             placeholder="Instructions (e.g. Questions 1–7: Choose TRUE, FALSE or NOT GIVEN)"
                             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent transition-all bg-white"
                           />
-                          {form.type === "listening" && (
-                            grp.questionImage ? (
-                              <div className="relative rounded-xl overflow-hidden border border-gray-200">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={grp.questionImage} alt="Diagram" className="w-full" />
-                                <button onClick={() => updateGroup(sec.id, grp.id, { questionImage: undefined })}
-                                  className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors">
-                                  <X size={13} className="text-gray-500" />
-                                </button>
-                              </div>
-                            ) : (
-                              <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-200 cursor-pointer hover:border-accent hover:bg-accent-lightest transition-all text-xs text-gray-400 hover:text-accent-darker group">
-                                <Upload size={12} className="flex-shrink-0" />
-                                Upload diagram / map / table (optional)
-                                <input type="file" accept="image/*" className="hidden" onChange={e => handleGroupImageUpload(sec.id, grp.id, e)} />
-                              </label>
-                            )
+                          {grp.questionImage ? (
+                            <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={grp.questionImage} alt="Diagram" className="w-full" />
+                              <button onClick={() => updateGroup(sec.id, grp.id, { questionImage: undefined })}
+                                className="absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-red-50 transition-colors">
+                                <X size={13} className="text-gray-500" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-200 cursor-pointer hover:border-accent hover:bg-accent-lightest transition-all text-xs text-gray-400 hover:text-accent-darker group">
+                              <Upload size={12} className="flex-shrink-0" />
+                              Upload diagram / map / table (optional)
+                              <input type="file" accept="image/*" className="hidden" onChange={e => handleGroupImageUpload(sec.id, grp.id, e)} />
+                            </label>
                           )}
                           <textarea value={grp.rawQuestions} onChange={e => updateGroup(sec.id, grp.id, { rawQuestions: e.target.value })}
                             rows={4} placeholder={"1. What is the main purpose?\nA) To inform\nB) To persuade\n\n2. According to the passage..."}
@@ -557,6 +658,133 @@ export default function MaterialsPage() {
               <Button variant="secondary" onClick={() => setStep(2)}>Back</Button>
               <Button className="flex-1" onClick={handleSave}>{editingId ? "Update Material" : "Save Material"}</Button>
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Import from backup modal */}
+      <Modal open={showImport} onClose={() => { setShowImport(false); setImportedIds(new Set()); }} title="Import from backup">
+        {importLoading ? (
+          <div className="flex items-center justify-center py-12 gap-3 text-gray-400">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm">Reading backup...</span>
+          </div>
+        ) : importError ? (
+          <div className="space-y-4">
+            <div className="bg-red-50 text-red-600 text-sm rounded-xl p-4">{importError}</div>
+            <Button variant="secondary" className="w-full" onClick={() => setShowImport(false)}>Close</Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Tab bar */}
+            <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+              {(["materials", "sessions", "events"] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setImportTab(tab)}
+                  className={cn("flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize",
+                    importTab === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500")}
+                >
+                  {tab} ({tab === "materials" ? backupMaterials.length : tab === "sessions" ? backupSessions.length : backupEvents.length})
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {importTab === "materials" ? (
+                backupMaterials.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-8">No materials in backup</p>
+                ) : backupMaterials.map(m => {
+                  const Icon = TYPE_ICONS[m.type];
+                  const done = importedIds.has(m.id);
+                  const dupe = !done && materials.some(ex => ex.id === m.id);
+                  return (
+                    <div key={m.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
+                        <Icon size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{m.title}</p>
+                        <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+                      </div>
+                      {done ? (
+                        <span className="text-xs text-green-600 font-medium flex-shrink-0">✓ Imported</span>
+                      ) : (
+                        <button onClick={() => importMaterial(m)}
+                          className={cn("text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0",
+                            dupe ? "bg-gray-200 text-gray-600 hover:bg-gray-300" : "bg-accent text-white hover:bg-accent-dark")}>
+                          {dupe ? "Import copy" : "Import"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              ) : importTab === "sessions" ? (
+                backupSessions.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-8">No sessions in backup</p>
+                ) : backupSessions.map(s => {
+                  const done = importedIds.has(s.id);
+                  const dupe = !done && sessions.some(ex => ex.id === s.id);
+                  const mat = materials.find(m => m.id === s.materialId) ??
+                              backupMaterials.find(m => m.id === s.materialId);
+                  return (
+                    <div key={s.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div className="w-9 h-9 rounded-lg bg-accent-lightest flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-bold text-accent-darker capitalize">{s.type[0].toUpperCase()}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {mat?.title ?? `${s.type} test`}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {s.date} · {s.score ?? "–"}/{s.maxScore} · {s.completed ? "Completed" : "Incomplete"}
+                        </p>
+                      </div>
+                      {done ? (
+                        <span className="text-xs text-green-600 font-medium flex-shrink-0">✓ Imported</span>
+                      ) : (
+                        <button onClick={() => importSession(s)}
+                          className={cn("text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0",
+                            dupe ? "bg-gray-200 text-gray-600 hover:bg-gray-300" : "bg-accent text-white hover:bg-accent-dark")}>
+                          {dupe ? "Import copy" : "Import"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                backupEvents.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-8">No calendar events in backup</p>
+                ) : backupEvents.map(e => {
+                  const done = importedIds.has(e.id);
+                  const dupe = !done && events.some(ex => ex.id === e.id);
+                  return (
+                    <div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">{e.type.slice(0, 3)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{e.title}</p>
+                        <p className="text-xs text-gray-500">{e.date} · {e.time} · {e.duration}min</p>
+                      </div>
+                      {done ? (
+                        <span className="text-xs text-green-600 font-medium flex-shrink-0">✓ Imported</span>
+                      ) : (
+                        <button onClick={() => importCalendarEvent(e)}
+                          className={cn("text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0",
+                            dupe ? "bg-gray-200 text-gray-600 hover:bg-gray-300" : "bg-accent text-white hover:bg-accent-dark")}>
+                          {dupe ? "Import copy" : "Import"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <Button variant="secondary" className="w-full" onClick={() => { setShowImport(false); setImportedIds(new Set()); }}>
+              Done
+            </Button>
           </div>
         )}
       </Modal>
