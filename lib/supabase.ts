@@ -20,6 +20,7 @@ function materialToDb(m: Material) {
     questions: m.questions ?? [],
     answer_key: m.answerKey ?? {},
     explanations: m.explanations ?? null,
+    answer_locations: m.answerLocations ?? null,
     duration: m.duration ?? 60,
     created_at: m.createdAt,
   };
@@ -37,6 +38,7 @@ function dbToMaterial(row: Record<string, unknown>): Material {
     questions: (row.questions as Material["questions"]) ?? [],
     answerKey: (row.answer_key as Record<string, string>) ?? {},
     explanations: row.explanations as Record<string, string> | undefined,
+    answerLocations: row.answer_locations as Material["answerLocations"] | undefined,
     duration: row.duration as number | undefined,
     createdAt: row.created_at as string,
   };

@@ -272,6 +272,52 @@ export function TestReview({ materialId, answers, activeQuestionId, onQuestionSe
                         ) : null}
                       </div>
                     )}
+                    {isActiveQ && !isCutie && (() => {
+                      const loc = material.answerLocations?.[q.id];
+                      let passageText = "";
+                      let hStart = -1, hEnd = -1;
+
+                      if (loc) {
+                        passageText = material.sections?.find(s => s.id === loc.sectionId)?.content ?? material.content ?? "";
+                        if (passageText && loc.end <= passageText.length) {
+                          hStart = loc.start;
+                          hEnd = loc.end;
+                        }
+                      }
+
+                      if (hStart === -1 && expected) {
+                        const candidates = [
+                          material.content ?? "",
+                          ...(material.sections ?? []).map(s => s.content ?? ""),
+                        ];
+                        for (const text of candidates) {
+                          if (!text) continue;
+                          const idx = text.toLowerCase().indexOf(expected.toLowerCase());
+                          if (idx !== -1) {
+                            passageText = text;
+                            hStart = idx;
+                            hEnd = idx + expected.length;
+                            break;
+                          }
+                        }
+                      }
+
+                      if (hStart === -1 || !passageText) return null;
+                      const snippetStart = Math.max(0, hStart - 80);
+                      const snippetEnd = Math.min(passageText.length, hEnd + 80);
+                      return (
+                        <div className="border-t border-amber-200 px-3 pb-3 pt-2.5 bg-amber-50" onClick={e => e.stopPropagation()}>
+                          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-1.5">Answer from passage</p>
+                          <p className="text-xs text-gray-700 leading-relaxed">
+                            {snippetStart > 0 && <span className="text-gray-400">…</span>}
+                            {passageText.slice(snippetStart, hStart)}
+                            <mark className="bg-amber-300 text-gray-900 rounded px-0.5 font-medium not-italic">{passageText.slice(hStart, hEnd)}</mark>
+                            {passageText.slice(hEnd, snippetEnd)}
+                            {snippetEnd < passageText.length && <span className="text-gray-400">…</span>}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

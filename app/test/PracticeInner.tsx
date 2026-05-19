@@ -53,6 +53,7 @@ export default function PracticeInner() {
   const [showReviewPassage, setShowReviewPassage] = useState(true);
   const [reviewSectionIdx, setReviewSectionIdx] = useState(0);
   const [activeReviewQId, setActiveReviewQId] = useState<string | null>(null);
+  const [activeDoneQId, setActiveDoneQId] = useState<string | null>(null);
   const [phase, setPhase] = useState<"active" | "done">("active");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [checkedGroups, setCheckedGroups] = useState<Set<number>>(new Set());
@@ -150,7 +151,15 @@ export default function PracticeInner() {
     const youtubeEnd = activeSection?.youtubeEnd;
 
     const activeLocation = activeReviewQId ? reviewMat?.answerLocations?.[activeReviewQId] : null;
-    const highlight = activeLocation?.sectionId === activeSectionId ? activeLocation : null;
+    let highlight: { start: number; end: number } | null = activeLocation?.sectionId === activeSectionId ? activeLocation : null;
+
+    if (!highlight && activeReviewQId && passageContent) {
+      const expected = reviewMat?.answerKey[activeReviewQId] ?? "";
+      if (expected) {
+        const idx = passageContent.toLowerCase().indexOf(expected.toLowerCase());
+        if (idx !== -1) highlight = { start: idx, end: idx + expected.length };
+      }
+    }
     const activeQNum = activeReviewQId
       ? reviewMat?.questions.find(q => q.id === activeReviewQId)?.number ?? null
       : null;
@@ -344,7 +353,7 @@ export default function PracticeInner() {
             )}
           </div>
 
-          <TestReview materialId={material.id} answers={answers} />
+          <TestReview materialId={material.id} answers={answers} activeQuestionId={activeDoneQId} onQuestionSelect={setActiveDoneQId} />
 
           <div className="flex gap-3">
             <Button variant="secondary" className="flex-1" onClick={() => router.push("/test?tab=practice")}>

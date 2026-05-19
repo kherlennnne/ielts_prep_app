@@ -40,6 +40,7 @@ export default function TestInner() {
   const [showReviewPassage, setShowReviewPassage] = useState(true);
   const [reviewSectionIdx, setReviewSectionIdx] = useState(0);
   const [activeReviewQId, setActiveReviewQId] = useState<string | null>(null);
+  const [activeDoneQId, setActiveDoneQId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentQ, setCurrentQ] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -164,7 +165,15 @@ export default function TestInner() {
     const youtubeEnd = activeSection?.youtubeEnd;
 
     const activeLocation = activeReviewQId ? reviewMat?.answerLocations?.[activeReviewQId] : null;
-    const highlight = activeLocation?.sectionId === activeSectionId ? activeLocation : null;
+    let highlight: { start: number; end: number } | null = activeLocation?.sectionId === activeSectionId ? activeLocation : null;
+
+    if (!highlight && activeReviewQId && passageContent) {
+      const expected = reviewMat?.answerKey[activeReviewQId] ?? "";
+      if (expected) {
+        const idx = passageContent.toLowerCase().indexOf(expected.toLowerCase());
+        if (idx !== -1) highlight = { start: idx, end: idx + expected.length };
+      }
+    }
 
     const activeQNum = activeReviewQId
       ? reviewMat?.questions.find(q => q.id === activeReviewQId)?.number ?? null
@@ -612,11 +621,11 @@ export default function TestInner() {
             </div>
           )}
 
-          <TestReview materialId={material.id} answers={answers} />
+          <TestReview materialId={material.id} answers={answers} activeQuestionId={activeDoneQId} onQuestionSelect={setActiveDoneQId} />
 
           <div className="flex gap-3">
             <Button variant="secondary" className="flex-1" onClick={() => router.push("/test?tab=mock")}>New Test</Button>
-            <Button className="flex-1" onClick={() => { setPhase("intro"); setAnswers({}); setCurrentQ(0); }}>Retry</Button>
+            <Button className="flex-1" onClick={() => { setPhase("intro"); setAnswers({}); setCurrentQ(0); setActiveDoneQId(null); }}>Retry</Button>
           </div>
         </div>
       </div>
