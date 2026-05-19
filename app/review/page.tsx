@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore, Material } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatTime, getBandScore, checkAnswer } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, GraduationCap, StickyNote, Trash2, BookOpen, FlaskConical } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, GraduationCap, StickyNote, Trash2, BookOpen, FlaskConical, Lightbulb, Pencil } from "lucide-react";
 import { useUser } from "@/lib/useUser";
 
 export default function ReviewPage() {
@@ -143,99 +143,18 @@ export default function ReviewPage() {
                         </div>
                       )}
 
-                      {material && session.type !== "writing" && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Answer Review</p>
-                          <div className="space-y-2">
-                            {material.questions.map(q => {
-                              const given = session.answers[q.id] ?? "";
-                              const expected = session.correctAnswers?.[q.id] ?? material.answerKey[q.id] ?? "";
-                              const isCorrect = checkAnswer(given, expected);
-                              const explanation = material.explanations?.[q.id] ?? "";
-                              const isEditingThis = editingExplanation?.sessionId === session.id && editingExplanation?.questionId === q.id;
-
-                              return (
-                                <div key={q.id} className={cn("rounded-xl border overflow-hidden",
-                                  isCorrect ? "bg-green-50 border-green-100" : given ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100")}>
-                                  <div className="flex items-start gap-2 p-3">
-                                    {isCorrect
-                                      ? <CheckCircle2 size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
-                                      : <XCircle size={14} className="text-red-400 mt-0.5 flex-shrink-0" />}
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs text-gray-700 mb-1.5 leading-relaxed">
-                                        <span className="font-medium">Q{q.number}:</span> {q.text.slice(0, 100)}{q.text.length > 100 ? "…" : ""}
-                                      </p>
-                                      <div className="flex flex-wrap gap-2">
-                                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
-                                          isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
-                                          Your: {given || "–"}
-                                        </span>
-                                        {!isCorrect && (
-                                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
-                                            Correct: {expected}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Explanation — cutie edits, pookie reads */}
-                                  {material && (explanation || isCutie) && (
-                                    <div className="border-t border-black/5 px-3 pb-3 pt-2.5">
-                                      {isCutie && isEditingThis ? (
-                                        <div>
-                                          <textarea
-                                            value={draftText}
-                                            onChange={e => setDraftText(e.target.value)}
-                                            placeholder="Add explanation, notes, or why this is the correct answer..."
-                                            rows={3}
-                                            autoFocus
-                                            className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-2 outline-none focus:border-accent bg-white resize-none transition-colors leading-relaxed"
-                                          />
-                                          <div className="flex gap-1.5 mt-1.5">
-                                            <button
-                                              onClick={() => saveExplanation(material.id, q.id, draftText)}
-                                              className="text-xs bg-accent text-white px-3 py-1 rounded-lg font-medium"
-                                            >
-                                              Save
-                                            </button>
-                                            <button
-                                              onClick={() => setEditingExplanation(null)}
-                                              className="text-xs text-gray-500 px-3 py-1 rounded-lg hover:bg-black/5 transition-colors"
-                                            >
-                                              Cancel
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ) : isCutie ? (
-                                        <button
-                                          onClick={() => {
-                                            setEditingExplanation({ sessionId: session.id, questionId: q.id });
-                                            setDraftText(explanation);
-                                          }}
-                                          className="flex items-start gap-1.5 text-left w-full group"
-                                        >
-                                          <StickyNote size={11} className="text-gray-400 group-hover:text-accent mt-0.5 flex-shrink-0 transition-colors" />
-                                          {explanation ? (
-                                            <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-800 transition-colors">{explanation}</span>
-                                          ) : (
-                                            <span className="text-xs text-gray-400 italic group-hover:text-accent transition-colors">Add explanation…</span>
-                                          )}
-                                        </button>
-                                      ) : explanation ? (
-                                        <div className="flex items-start gap-1.5">
-                                          <StickyNote size={11} className="text-accent mt-0.5 flex-shrink-0" />
-                                          <span className="text-xs text-gray-600 leading-relaxed">{explanation}</span>
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      {material && session.type !== "writing" && <ReviewQuestions
+                        material={material}
+                        sessionId={session.id}
+                        sessionAnswers={session.answers}
+                        correctAnswers={session.correctAnswers}
+                        isCutie={isCutie}
+                        editingExplanation={editingExplanation}
+                        draftText={draftText}
+                        setDraftText={setDraftText}
+                        setEditingExplanation={setEditingExplanation}
+                        saveExplanation={saveExplanation}
+                      />}
 
                       {session.type === "writing" && material && (
                         <div>
@@ -294,6 +213,186 @@ export default function ReviewPage() {
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ReviewQuestions({ material, sessionId, sessionAnswers, correctAnswers, isCutie, editingExplanation, draftText, setDraftText, setEditingExplanation, saveExplanation }: {
+  material: Material;
+  sessionId: string;
+  sessionAnswers: Record<string, string>;
+  correctAnswers?: Record<string, string>;
+  isCutie: boolean;
+  editingExplanation: { sessionId: string; questionId: string } | null;
+  draftText: string;
+  setDraftText: (v: string) => void;
+  setEditingExplanation: (v: { sessionId: string; questionId: string } | null) => void;
+  saveExplanation: (materialId: string, questionId: string, text: string) => void;
+}) {
+  const { updateMaterial } = useStore();
+  const [editingTipGroupId, setEditingTipGroupId] = useState<string | null>(null);
+  const [draftTip, setDraftTip] = useState("");
+
+  function saveGroupTip(groupId: string, tip: string) {
+    const updatedSections = (material.sections ?? []).map(sec => ({
+      ...sec,
+      groups: sec.groups.map(g => g.id === groupId ? { ...g, tip: tip.trim() || undefined } : g),
+    }));
+    updateMaterial(material.id, { sections: updatedSections });
+    setEditingTipGroupId(null);
+  }
+
+  const allGroups: { id: string; instruction?: string; tip?: string; questions: Material["questions"] }[] = [];
+  if (material.sections?.length) {
+    for (const sec of material.sections)
+      for (const grp of sec.groups) allGroups.push(grp);
+  }
+  if (!allGroups.length)
+    allGroups.push({ id: "default", questions: material.questions });
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Answer Review</p>
+      <div className="space-y-5">
+        {allGroups.map(group => (
+          <div key={group.id}>
+            {group.instruction && (
+              <div className="mb-2 px-3 py-2.5 bg-accent-lightest border border-accent/20 rounded-xl">
+                <p className="text-xs text-accent-darker font-medium leading-relaxed">{group.instruction}</p>
+              </div>
+            )}
+            {editingTipGroupId === group.id ? (
+              <div className="mb-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Lightbulb size={12} className="text-amber-500 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-amber-700">Group tip</span>
+                </div>
+                <textarea
+                  value={draftTip}
+                  onChange={e => setDraftTip(e.target.value)}
+                  placeholder="Add a tip for this question group…"
+                  rows={2}
+                  autoFocus
+                  className="w-full text-xs rounded-lg border border-amber-300 px-2.5 py-2 outline-none focus:border-amber-500 bg-white resize-none transition-colors leading-relaxed"
+                />
+                <div className="flex gap-1.5 mt-1.5">
+                  <button onClick={() => saveGroupTip(group.id, draftTip)}
+                    className="text-xs bg-amber-500 text-white px-3 py-1 rounded-lg font-medium">Save</button>
+                  <button onClick={() => setEditingTipGroupId(null)}
+                    className="text-xs text-gray-500 px-3 py-1 rounded-lg hover:bg-black/5 transition-colors">Cancel</button>
+                </div>
+              </div>
+            ) : group.tip ? (
+              <div className="flex items-start gap-2 mb-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                <Lightbulb size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-800 leading-relaxed flex-1">{group.tip}</p>
+                {isCutie && (
+                  <button onClick={() => { setEditingTipGroupId(group.id); setDraftTip(group.tip ?? ""); }}
+                    className="p-1 rounded hover:bg-amber-100 text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0">
+                    <Pencil size={11} />
+                  </button>
+                )}
+              </div>
+            ) : isCutie ? (
+              <button
+                onClick={() => { setEditingTipGroupId(group.id); setDraftTip(""); }}
+                className="flex items-center gap-1.5 mb-2 text-xs text-amber-500 hover:text-amber-700 font-medium transition-colors"
+              >
+                <Lightbulb size={12} /> Add tip for this group
+              </button>
+            ) : null}
+            <div className="space-y-2">
+              {group.questions.map(q => {
+                const given = sessionAnswers[q.id] ?? "";
+                const expected = correctAnswers?.[q.id] ?? material.answerKey[q.id] ?? "";
+                const isCorrect = checkAnswer(given, expected);
+                const explanation = material.explanations?.[q.id] ?? "";
+                const isEditingThis = editingExplanation?.sessionId === sessionId && editingExplanation?.questionId === q.id;
+
+                return (
+                  <div key={q.id} className={cn("rounded-xl border overflow-hidden",
+                    isCorrect ? "bg-green-50 border-green-100" : given ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100")}>
+                    <div className="p-3">
+                      <div className="flex items-start gap-2 mb-2">
+                        {isCorrect
+                          ? <CheckCircle2 size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
+                          : <XCircle size={14} className="text-red-400 mt-0.5 flex-shrink-0" />}
+                        <p className="text-xs text-gray-800 font-medium leading-relaxed">Q{q.number}: {q.text}</p>
+                      </div>
+
+                      {q.type === "mcq" && q.options && (
+                        <div className="ml-5 mb-2 space-y-1">
+                          {q.options.map((opt, i) => {
+                            const letter = String.fromCharCode(65 + i);
+                            const isUserAnswer = given === letter;
+                            const isCorrectAnswer = expected === letter;
+                            return (
+                              <div key={i} className={cn(
+                                "flex items-start gap-1.5 px-2 py-1 rounded-lg text-xs",
+                                isCorrectAnswer ? "bg-green-100 text-green-800 font-medium"
+                                  : isUserAnswer && !isCorrect ? "bg-red-100 text-red-700 line-through"
+                                  : "text-gray-500"
+                              )}>
+                                <span className="font-semibold flex-shrink-0">{letter})</span>
+                                <span>{opt}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 ml-5">
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
+                          isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+                          Your: {given || "–"}
+                        </span>
+                        {!isCorrect && expected && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">
+                            Correct: {expected}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {(explanation || isCutie) && (
+                      <div className="border-t border-black/5 px-3 pb-3 pt-2.5">
+                        {isCutie && isEditingThis ? (
+                          <div>
+                            <textarea value={draftText} onChange={e => setDraftText(e.target.value)}
+                              placeholder="Add explanation, notes, or why this is the correct answer..."
+                              rows={3} autoFocus
+                              className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-2 outline-none focus:border-accent bg-white resize-none transition-colors leading-relaxed"
+                            />
+                            <div className="flex gap-1.5 mt-1.5">
+                              <button onClick={() => saveExplanation(material.id, q.id, draftText)}
+                                className="text-xs bg-accent text-white px-3 py-1 rounded-lg font-medium">Save</button>
+                              <button onClick={() => setEditingExplanation(null)}
+                                className="text-xs text-gray-500 px-3 py-1 rounded-lg hover:bg-black/5 transition-colors">Cancel</button>
+                            </div>
+                          </div>
+                        ) : isCutie ? (
+                          <button onClick={() => { setEditingExplanation({ sessionId, questionId: q.id }); setDraftText(explanation); }}
+                            className="flex items-start gap-1.5 text-left w-full group">
+                            <StickyNote size={11} className="text-gray-400 group-hover:text-accent mt-0.5 flex-shrink-0 transition-colors" />
+                            {explanation
+                              ? <span className="text-xs text-gray-600 leading-relaxed group-hover:text-gray-800 transition-colors">{explanation}</span>
+                              : <span className="text-xs text-gray-400 italic group-hover:text-accent transition-colors">Add explanation…</span>}
+                          </button>
+                        ) : explanation ? (
+                          <div className="flex items-start gap-1.5">
+                            <StickyNote size={11} className="text-accent mt-0.5 flex-shrink-0" />
+                            <span className="text-xs text-gray-600 leading-relaxed">{explanation}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

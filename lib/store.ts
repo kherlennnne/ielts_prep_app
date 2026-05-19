@@ -57,6 +57,7 @@ export interface QuestionGroup {
   id: string;
   instruction?: string;
   questionImage?: string;
+  tip?: string;
   questions: Question[];
 }
 

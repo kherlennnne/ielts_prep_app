@@ -21,6 +21,7 @@ const TYPE_COLORS = {
 interface FormGroup {
   id: string;
   instruction: string;
+  tip: string;
   rawQuestions: string;
   rawAnswers: string;
   questionImage?: string;
@@ -40,7 +41,7 @@ interface FormSection {
 }
 
 const defaultGroup = (): FormGroup => ({
-  id: generateId(), instruction: "", rawQuestions: "", rawAnswers: "", questionImage: undefined,
+  id: generateId(), instruction: "", tip: "", rawQuestions: "", rawAnswers: "", questionImage: undefined,
 });
 
 const defaultSection = (): FormSection => ({
@@ -68,7 +69,7 @@ function groupToForm(grp: QuestionGroup, answerKey: Record<string, string>): For
     return line;
   }).join("\n\n");
   const rawAnswers = grp.questions.map(q => `${q.number}. ${answerKey[q.id] ?? ""}`).join("\n");
-  return { id: grp.id, instruction: grp.instruction ?? "", rawQuestions, rawAnswers, questionImage: grp.questionImage };
+  return { id: grp.id, instruction: grp.instruction ?? "", tip: grp.tip ?? "", rawQuestions, rawAnswers, questionImage: grp.questionImage };
 }
 
 function materialToForm(m: Material): { title: string; type: Material["type"]; testMode: Material["testMode"]; duration: number; sections: FormSection[] } {
@@ -160,13 +161,15 @@ export default function MaterialsPage() {
     setImportedIds(prev => { const n = new Set(prev); n.add(e.id); return n; });
   }
 
-  function parseQuestions(raw: string, startNumber: number): Question[] {
+  function parseQuestions(raw: string, startNumber: number, existingIds: Record<number, string> = {}): Question[] {
     return raw.trim().split("\n\n").filter(Boolean).map((block, i) => {
       const lines = block.trim().split("\n");
       const firstLine = lines[0].replace(/^\d+[\.\)]\s*/, "");
       const opts = lines.slice(1).filter(l => /^[A-D][\.\)]/i.test(l.trim()));
+      const num = startNumber + i;
       return {
-        id: generateId(), number: startNumber + i,
+        id: existingIds[num] ?? generateId(),
+        number: num,
         type: opts.length ? "mcq" : "short",
         text: firstLine,
         options: opts.length ? opts.map(o => o.replace(/^[A-D][\.\)]\s*/i, "")) : undefined,
@@ -191,13 +194,20 @@ export default function MaterialsPage() {
       const allQuestions: Question[] = [];
       const allAnswerKey: Record<string, string> = {};
 
+      // Build a lookup of existing question IDs by number so edits don't orphan sessions
+      const existingById: Record<number, string> = {};
+      if (editingId) {
+        const existing = materials.find(m => m.id === editingId);
+        existing?.questions.forEach(q => { existingById[q.number] = q.id; });
+      }
+
       for (const fs of form.sections) {
         const groups: QuestionGroup[] = [];
         for (const fg of fs.groups) {
           if (!fg.rawQuestions.trim()) continue;
-          const questions = parseQuestions(fg.rawQuestions, qNumber);
+          const questions = parseQuestions(fg.rawQuestions, qNumber, existingById);
           const answerKey = parseAnswers(fg.rawAnswers, questions);
-          groups.push({ id: fg.id, instruction: fg.instruction || undefined, questionImage: fg.questionImage, questions });
+          groups.push({ id: fg.id, instruction: fg.instruction || undefined, tip: fg.tip || undefined, questionImage: fg.questionImage, questions });
           allQuestions.push(...questions);
           Object.assign(allAnswerKey, answerKey);
           qNumber += questions.length;
@@ -574,6 +584,12 @@ export default function MaterialsPage() {
                             onChange={e => updateGroup(sec.id, grp.id, { instruction: e.target.value })}
                             placeholder="Instructions (e.g. Questions 1–7: Choose TRUE, FALSE or NOT GIVEN)"
                             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-accent transition-all bg-white"
+                          />
+                          <input
+                            value={grp.tip}
+                            onChange={e => updateGroup(sec.id, grp.id, { tip: e.target.value })}
+                            placeholder="Review tip for this group (e.g. Scan for keywords before reading)"
+                            className="w-full rounded-lg border border-amber-200 px-3 py-2 text-xs outline-none focus:border-amber-400 transition-all bg-amber-50 placeholder-amber-400"
                           />
                           {grp.questionImage ? (
                             <div className="relative rounded-xl overflow-hidden border border-gray-200">
