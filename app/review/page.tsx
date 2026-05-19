@@ -35,7 +35,7 @@ export default function ReviewPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-full overflow-x-hidden">
       <PageHeader title="Review" subtitle={`${completed.length} test${completed.length !== 1 ? "s" : ""} completed`} />
 
       <div className="px-4 lg:px-8">

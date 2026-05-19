@@ -71,7 +71,7 @@ export default function TipsPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-full overflow-x-hidden">
       <PageHeader
         title="Test Tips"
         subtitle="Strategies and advice for each section"
@@ -136,7 +136,7 @@ export default function TipsPage() {
                     <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{tip.content}</p>
                   </div>
                   {isCutie && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                       <button
                         onClick={() => openEdit(tip)}
                         className="p-1.5 rounded-lg hover:bg-accent-lightest text-gray-400 hover:text-accent-darker transition-colors"

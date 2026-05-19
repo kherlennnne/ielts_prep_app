@@ -42,7 +42,7 @@ export default function VocabPage() {
   const uncategorized = grouped.get(null) ?? [];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-full overflow-x-hidden">
       <PageHeader title="Vocabulary" subtitle={`${vocab.length} word${vocab.length !== 1 ? "s" : ""} saved`} />
 
       <div className="px-4 lg:px-8 pb-8">
@@ -397,7 +397,7 @@ function WordGrid({ words, editingId, noteText, setEditingId, setNoteText, delet
             <span className="font-semibold text-gray-900 text-sm leading-tight break-words">{v.word}</span>
             <button
               onClick={() => deleteVocab(v.id)}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all flex-shrink-0"
+              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
             >
               <Trash2 size={13} />
             </button>

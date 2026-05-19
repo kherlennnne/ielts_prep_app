@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen">
         <Sidebar />
-        <main className="flex-1 lg:ml-16 pb-20 lg:pb-0 min-h-screen flex flex-col items-center justify-center gap-3">
+        <main className="flex-1 lg:ml-16 pb-20 lg:pb-0 min-h-screen overflow-x-hidden flex flex-col items-center justify-center gap-3">
           <Loader2 size={22} className="text-gray-300 animate-spin" />
           <p className="text-gray-400 text-sm">Loading from Supabase…</p>
           {syncStatus === "error" && (
@@ -93,7 +93,7 @@ ALTER TABLE tips       DISABLE ROW LEVEL SECURITY;`
       <AutoLogout />
       <div className="flex min-h-screen">
         <Sidebar />
-        <main className="flex-1 lg:ml-16 pb-20 lg:pb-0 min-h-screen">{children}</main>
+        <main className="flex-1 lg:ml-16 pb-20 lg:pb-0 min-h-screen overflow-x-hidden">{children}</main>
       </div>
       <BottomNav />
 

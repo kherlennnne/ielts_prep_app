@@ -12,6 +12,7 @@ import {
   ChevronLeft, ChevronRight, CheckCircle2, XCircle, BookOpen,
   FileText, Headphones, PenLine, BookMarked, X,
 } from "lucide-react";
+import { TestReview } from "@/components/ui/TestReview";
 
 const TYPE_ICONS = { listening: Headphones, reading: FileText, writing: PenLine };
 const TYPE_COLORS = {
@@ -39,12 +40,15 @@ export default function PracticeInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const materialId = searchParams.get("material");
-  const { materials, vocab, addVocab, addEvent, addSession } = useStore();
+  const { materials, vocab, sessions, addVocab, addEvent, addSession } = useStore();
 
   const practiceMaterials = materials.filter(m => m.testMode === "practice");
   const material = materials.find(m => m.id === materialId);
   const materialVocab = vocab.filter(v => v.materialId === materialId);
 
+  const [reviewSession, setReviewSession] = useState<{ materialId: string; answers: Record<string, string>; date: string } | null>(null);
+  const [showReviewPassage, setShowReviewPassage] = useState(true);
+  const [reviewSectionIdx, setReviewSectionIdx] = useState(0);
   const [phase, setPhase] = useState<"active" | "done">("active");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [checkedGroups, setCheckedGroups] = useState<Set<number>>(new Set());
@@ -127,6 +131,94 @@ export default function PracticeInner() {
     allGroups.push({ section: null, group: { id: "default", questions: material.questions } });
   }
 
+  // ── Review past session ───────────────────────────────────────────────────────
+  if (reviewSession) {
+    const reviewMat = materials.find(m => m.id === reviewSession.materialId);
+    const hasPassage = reviewMat?.type !== "writing";
+    const reviewSections = reviewMat?.sections ?? [];
+    const activeSection = reviewSections[reviewSectionIdx] ?? null;
+    const passageContent = activeSection?.content ?? reviewMat?.content;
+    const passageImg = activeSection?.passageImage ?? reviewMat?.passageImage;
+    const passageTitle = activeSection?.title;
+    const youtubeId = activeSection?.youtubeUrl ? getYouTubeId(activeSection.youtubeUrl) : null;
+    const youtubeStart = activeSection?.youtubeStart ?? 0;
+    const youtubeEnd = activeSection?.youtubeEnd;
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 flex items-center justify-between gap-3">
+          <button
+            onClick={() => { setReviewSession(null); setShowReviewPassage(true); setReviewSectionIdx(0); }}
+            className="text-sm text-accent-darker font-medium hover:opacity-70 transition-opacity flex-shrink-0"
+          >
+            ← Back
+          </button>
+          <span className="text-xs font-semibold text-gray-700 truncate">{reviewMat?.title ?? "Review"}</span>
+          <span className="text-xs text-gray-400 flex-shrink-0">{reviewSession.date}</span>
+        </div>
+
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+          {/* Passage panel */}
+          {hasPassage && (
+            <div className={cn("lg:w-1/2 lg:border-r border-gray-100 flex flex-col", showReviewPassage ? "flex" : "hidden lg:flex")}>
+              {reviewSections.length > 1 && (
+                <div className="flex overflow-x-auto px-4 py-2 gap-2 border-b border-gray-100 bg-white flex-shrink-0">
+                  {reviewSections.map((sec, i) => (
+                    <button key={sec.id} onClick={() => setReviewSectionIdx(i)}
+                      className={cn("px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors",
+                        i === reviewSectionIdx ? "bg-accent text-white" : "text-gray-500 hover:bg-gray-100")}>
+                      {sec.title || `Part ${i + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-white flex-shrink-0">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Passage</span>
+                <button onClick={() => setShowReviewPassage(false)} className="lg:hidden text-xs text-accent-darker font-medium">
+                  Review →
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+                {passageTitle && <h3 className="font-serif text-lg text-gray-900 mb-4 leading-snug">{passageTitle}</h3>}
+                {youtubeId && (
+                  <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 aspect-video">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${youtubeId}?start=${youtubeStart}${youtubeEnd ? `&end=${youtubeEnd}` : ""}`}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+                {passageImg ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={passageImg} alt="Passage" className="w-full rounded-xl border border-gray-100" />
+                ) : passageContent ? (
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{passageContent}</p>
+                ) : !youtubeId ? (
+                  <div className="text-center py-14 text-gray-400 text-sm">No passage for this section</div>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Review panel */}
+          <div className={cn("flex-1 flex flex-col overflow-hidden", hasPassage && showReviewPassage ? "hidden lg:flex" : "flex")}>
+            <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+              {hasPassage && (
+                <button onClick={() => setShowReviewPassage(true)} className="lg:hidden text-xs text-accent-darker font-medium mb-4 block">
+                  ← Passage
+                </button>
+              )}
+              <TestReview materialId={reviewSession.materialId} answers={reviewSession.answers} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Select phase ──────────────────────────────────────────────────────────────
   if (!material) {
     return (
@@ -143,16 +235,19 @@ export default function PracticeInner() {
             {practiceMaterials.map((m) => {
               const Icon = TYPE_ICONS[m.type];
               const mVocab = vocab.filter(v => v.materialId === m.id);
+              const lastSession = sessions
+                .filter(s => s.completed && s.materialId === m.id)
+                .sort((a, b) => b.date.localeCompare(a.date))[0];
               return (
-                <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+                <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
                   <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
                     <Icon size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm">{m.title}</p>
+                    <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions · No timer</p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                     <button
                       onClick={() => setPreviewVocabId(m.id)}
                       className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
@@ -165,6 +260,14 @@ export default function PracticeInner() {
                         </span>
                       )}
                     </button>
+                    {lastSession && (
+                      <button
+                        onClick={() => setReviewSession({ materialId: m.id, answers: lastSession.answers, date: lastSession.date })}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+                      >
+                        Review
+                      </button>
+                    )}
                     <Button size="sm" onClick={() => router.push(`/test?tab=practice&material=${m.id}`)}>
                       Practice <ChevronRight size={13} />
                     </Button>
@@ -197,46 +300,20 @@ export default function PracticeInner() {
     return (
       <div className="min-h-screen">
         <PageHeader title="Practice Complete" />
-        <div className="px-4 lg:px-8 space-y-4">
+        <div className="px-4 lg:px-8 space-y-4 pb-8">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
             <CheckCircle2 size={48} className="text-green-500 mx-auto mb-3" />
-            <p className="text-gray-700 font-medium mt-3">{correct}/{total} correct</p>
+            {material.type !== "writing" && (
+              <p className="text-gray-700 font-medium mt-3">{correct}/{total} correct</p>
+            )}
             {timeSpent > 0 && (
               <p className="text-xs text-gray-400 mt-1">Time spent: {formatTime(timeSpent)}</p>
             )}
           </div>
 
-          {/* Per-question breakdown */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Question Review</p>
-            <div className="space-y-2">
-              {material.questions.map(q => {
-                const given = answers[q.id] ?? "";
-                const expected = material.answerKey[q.id] ?? "";
-                const isCorrect = checkAnswer(given, expected);
-                return (
-                  <div key={q.id} className={cn(
-                    "flex items-start gap-3 p-3 rounded-xl",
-                    isCorrect ? "bg-green-50" : "bg-red-50"
-                  )}>
-                    {isCorrect
-                      ? <CheckCircle2 size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
-                      : <XCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-700">Q{q.number}</p>
-                      <p className="text-xs text-gray-500 line-clamp-2">{q.text}</p>
-                      {!isCorrect && expected && (
-                        <p className="text-xs text-green-700 mt-0.5">Correct: <span className="font-semibold">{expected}</span></p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <TestReview materialId={material.id} answers={answers} />
 
-          <div className="flex gap-3 pb-6">
+          <div className="flex gap-3">
             <Button variant="secondary" className="flex-1" onClick={() => router.push("/test?tab=practice")}>
               Back
             </Button>

@@ -14,6 +14,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body, h2, h3 {
   @apply bg-white text-gray-900 antialiased;
   font-family: 'DM Sans', sans-serif;
@@ -51,4 +56,9 @@ h1 {
 /* Smooth transitions for mobile nav */
 .nav-slide {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Safe area padding for iPhone home indicator */
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
