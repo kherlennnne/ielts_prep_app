@@ -5,6 +5,7 @@ import { useStore, Question } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { PassageAnnotator, TextAnnotation, AnnotationColor, AnnotationToolbar } from "@/components/ui/PassageAnnotator";
+import { HighlightablePassage } from "@/components/ui/HighlightablePassage";
 import { generateId, formatTime, getBandScore, checkAnswer, getYouTubeId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
@@ -12,6 +13,7 @@ import {
   FileText, Headphones, PenLine,
 } from "lucide-react";
 import { TestReview } from "@/components/ui/TestReview";
+import { useUser } from "@/lib/useUser";
 
 const DEFAULT_TIMES = { reading: 60, listening: 30, writing: 60 }; // minutes
 const TYPE_ICONS = { listening: Headphones, reading: FileText, writing: PenLine };
@@ -26,8 +28,9 @@ export default function TestInner() {
   const router = useRouter();
   const materialId = searchParams.get("material");
   const {
-    materials, sessions, addSession, updateSession, addEvent, updateEvent,
+    materials, sessions, addSession, updateSession, addEvent, updateEvent, updateMaterial,
   } = useStore();
+  const { isCutie } = useUser();
 
   const mockMaterials = materials.filter(m => (m.testMode ?? "mock") === "mock");
   const material = materials.find(m => m.id === materialId);
@@ -36,6 +39,7 @@ export default function TestInner() {
   const [reviewSession, setReviewSession] = useState<{ materialId: string; answers: Record<string, string>; date: string } | null>(null);
   const [showReviewPassage, setShowReviewPassage] = useState(true);
   const [reviewSectionIdx, setReviewSectionIdx] = useState(0);
+  const [activeReviewQId, setActiveReviewQId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentQ, setCurrentQ] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -151,6 +155,7 @@ export default function TestInner() {
     const hasPassage = reviewMat?.type !== "writing";
     const reviewSections = reviewMat?.sections ?? [];
     const activeSection = reviewSections[reviewSectionIdx] ?? null;
+    const activeSectionId = activeSection?.id ?? "default";
     const passageContent = activeSection?.content ?? reviewMat?.content;
     const passageImg = activeSection?.passageImage ?? reviewMat?.passageImage;
     const passageTitle = activeSection?.title;
@@ -158,12 +163,29 @@ export default function TestInner() {
     const youtubeStart = activeSection?.youtubeStart ?? 0;
     const youtubeEnd = activeSection?.youtubeEnd;
 
+    const activeLocation = activeReviewQId ? reviewMat?.answerLocations?.[activeReviewQId] : null;
+    const highlight = activeLocation?.sectionId === activeSectionId ? activeLocation : null;
+
+    const activeQNum = activeReviewQId
+      ? reviewMat?.questions.find(q => q.id === activeReviewQId)?.number ?? null
+      : null;
+
+    const handleMarkRange = (start: number, end: number) => {
+      if (!reviewMat || !activeReviewQId) return;
+      updateMaterial(reviewMat.id, {
+        answerLocations: {
+          ...(reviewMat.answerLocations ?? {}),
+          [activeReviewQId]: { sectionId: activeSectionId, start, end },
+        },
+      });
+    };
+
     return (
       <div className="min-h-screen flex flex-col">
         {/* Header */}
         <div className="bg-white border-b border-gray-100 sticky top-0 z-30 px-4 py-3 flex items-center justify-between gap-3">
           <button
-            onClick={() => { setReviewSession(null); setShowReviewPassage(true); setReviewSectionIdx(0); }}
+            onClick={() => { setReviewSession(null); setShowReviewPassage(true); setReviewSectionIdx(0); setActiveReviewQId(null); }}
             className="text-sm text-accent-darker font-medium hover:opacity-70 transition-opacity flex-shrink-0"
           >
             ← Back
@@ -209,7 +231,14 @@ export default function TestInner() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={passageImg} alt="Passage" className="w-full rounded-xl border border-gray-100" />
                 ) : passageContent ? (
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{passageContent}</p>
+                  <HighlightablePassage
+                    text={passageContent}
+                    sectionId={activeSectionId}
+                    highlight={highlight}
+                    isCutie={isCutie}
+                    activeQuestionNumber={activeQNum}
+                    onMarkRange={handleMarkRange}
+                  />
                 ) : !youtubeId ? (
                   <div className="text-center py-14 text-gray-400 text-sm">No passage for this section</div>
                 ) : null}
@@ -221,11 +250,16 @@ export default function TestInner() {
           <div className={cn("flex-1 flex flex-col overflow-hidden", hasPassage && showReviewPassage ? "hidden lg:flex" : "flex")}>
             <div className="flex-1 overflow-y-auto p-4 lg:p-6">
               {hasPassage && (
-                <button onClick={() => setShowReviewPassage(true)} className="lg:hidden text-xs text-accent-darker font-medium mb-4 block">
+                <button onClick={() => { setShowReviewPassage(true); }} className="lg:hidden text-xs text-accent-darker font-medium mb-4 block">
                   ← Passage
                 </button>
               )}
-              <TestReview materialId={reviewSession.materialId} answers={reviewSession.answers} />
+              <TestReview
+                materialId={reviewSession.materialId}
+                answers={reviewSession.answers}
+                activeQuestionId={activeReviewQId}
+                onQuestionSelect={qId => { setActiveReviewQId(qId); if (hasPassage) setShowReviewPassage(true); }}
+              />
             </div>
           </div>
         </div>

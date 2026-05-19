@@ -9,9 +9,11 @@ import { cn } from "@/lib/utils";
 interface TestReviewProps {
   materialId: string;
   answers: Record<string, string>;
+  activeQuestionId?: string | null;
+  onQuestionSelect?: (qId: string | null) => void;
 }
 
-export function TestReview({ materialId, answers }: TestReviewProps) {
+export function TestReview({ materialId, answers, activeQuestionId, onQuestionSelect }: TestReviewProps) {
   const { materials, updateMaterial } = useStore();
   const { isCutie } = useUser();
   const material = materials.find(m => m.id === materialId);
@@ -173,11 +175,19 @@ export function TestReview({ materialId, answers }: TestReviewProps) {
                 const explanation = material.explanations?.[q.id] ?? "";
                 const isEditingThis = editingId === q.id;
 
+                const isActiveQ = activeQuestionId === q.id;
                 return (
-                  <div key={q.id} className={cn(
-                    "rounded-xl border overflow-hidden",
-                    isCorrect ? "bg-green-50 border-green-100" : given ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100"
-                  )}>
+                  <div
+                    key={q.id}
+                    onClick={() => onQuestionSelect?.(isActiveQ ? null : q.id)}
+                    className={cn(
+                      "rounded-xl border overflow-hidden transition-all",
+                      onQuestionSelect && "cursor-pointer",
+                      isActiveQ
+                        ? "ring-2 ring-amber-400 border-amber-300"
+                        : isCorrect ? "bg-green-50 border-green-100" : given ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100"
+                    )}
+                  >
                     <div className="p-3">
                       <div className="flex items-start gap-2 mb-2">
                         {isCorrect

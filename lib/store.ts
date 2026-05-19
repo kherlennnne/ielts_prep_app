@@ -29,6 +29,12 @@ export interface TestSession {
   trackedEventId?: string;
 }
 
+export interface AnswerLocation {
+  sectionId: string;
+  start: number;
+  end: number;
+}
+
 export interface Material {
   id: string;
   title: string;
@@ -41,6 +47,7 @@ export interface Material {
   answerKey: Record<string, string>;
   duration?: number;
   explanations?: Record<string, string>;
+  answerLocations?: Record<string, AnswerLocation>;
   createdAt: string;
 }
 
