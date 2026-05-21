@@ -296,37 +296,37 @@ export default function TestInner() {
                 .sort((a, b) => b.date.localeCompare(a.date))[0];
               return (
                 <div key={m.id} className={cn(
-                  "rounded-2xl border shadow-sm p-4 flex items-center gap-3",
-                  lastSession
-                    ? "bg-green-50 border-green-200"
-                    : "bg-white border-gray-100"
+                  "rounded-2xl border shadow-sm overflow-hidden",
+                  lastSession ? "bg-green-50 border-green-200" : "bg-white border-gray-100"
                 )}>
-                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
-                    <Icon size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
-                      {lastSession && (
-                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full">
-                          <CheckCircle2 size={10} /> Done
-                        </span>
-                      )}
+                  <div className="p-4 flex items-center gap-3">
+                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
+                      <Icon size={18} />
                     </div>
-                    <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                    {lastSession && (
-                      <button
-                        onClick={() => setReviewSession({ materialId: m.id, answers: lastSession.answers, date: lastSession.date })}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
-                      >
-                        Review
-                      </button>
-                    )}
-                    <Button size="sm" onClick={() => router.push(`/test?tab=mock&material=${m.id}`)}>
-                      Start <ChevronRight size={13} />
-                    </Button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+                        {lastSession && (
+                          <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full">
+                            <CheckCircle2 size={10} /> Done
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                      {(lastSession || isCutie) && (
+                        <button
+                          onClick={() => setReviewSession({ materialId: m.id, answers: lastSession?.answers ?? {}, date: lastSession?.date ?? "" })}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+                        >
+                          Review
+                        </button>
+                      )}
+                      <Button size="sm" onClick={() => router.push(`/test?tab=mock&material=${m.id}`)}>
+                        Start <ChevronRight size={13} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

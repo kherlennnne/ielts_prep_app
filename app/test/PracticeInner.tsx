@@ -281,38 +281,40 @@ export default function PracticeInner() {
                 .filter(s => s.completed && s.materialId === m.id)
                 .sort((a, b) => b.date.localeCompare(a.date))[0];
               return (
-                <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
-                    <Icon size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
-                    <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions · No timer</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                    <button
-                      onClick={() => setPreviewVocabId(m.id)}
-                      className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
-                    >
-                      <BookMarked size={13} />
-                      Vocab
-                      {mVocab.length > 0 && (
-                        <span className="bg-accent text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
-                          {mVocab.length}
-                        </span>
-                      )}
-                    </button>
-                    {lastSession && (
+                <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-4 flex items-center gap-3">
+                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
+                      <Icon size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+                      <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions · No timer</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                       <button
-                        onClick={() => setReviewSession({ materialId: m.id, answers: lastSession.answers, date: lastSession.date })}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+                        onClick={() => setPreviewVocabId(m.id)}
+                        className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
                       >
-                        Review
+                        <BookMarked size={13} />
+                        Vocab
+                        {mVocab.length > 0 && (
+                          <span className="bg-accent text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
+                            {mVocab.length}
+                          </span>
+                        )}
                       </button>
-                    )}
-                    <Button size="sm" onClick={() => router.push(`/test?tab=practice&material=${m.id}`)}>
-                      Practice <ChevronRight size={13} />
-                    </Button>
+                      {(lastSession || isCutie) && (
+                        <button
+                          onClick={() => setReviewSession({ materialId: m.id, answers: lastSession?.answers ?? {}, date: lastSession?.date ?? "" })}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+                        >
+                          Review
+                        </button>
+                      )}
+                      <Button size="sm" onClick={() => router.push(`/test?tab=practice&material=${m.id}`)}>
+                        Practice <ChevronRight size={13} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

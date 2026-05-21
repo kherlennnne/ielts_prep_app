@@ -143,7 +143,7 @@ export default function ReviewPage() {
                         </div>
                       )}
 
-                      {material && session.type !== "writing" && <ReviewQuestions
+{material && session.type !== "writing" && <ReviewQuestions
                         material={material}
                         sessionId={session.id}
                         sessionAnswers={session.answers}
