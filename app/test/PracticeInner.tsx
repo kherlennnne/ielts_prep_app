@@ -56,7 +56,6 @@ export default function PracticeInner() {
   const [activeDoneQId, setActiveDoneQId] = useState<string | null>(null);
   const [phase, setPhase] = useState<"active" | "done">("active");
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [checkedGroups, setCheckedGroups] = useState<Set<number>>(new Set());
   const [currentGroupIdx, setCurrentGroupIdx] = useState(0);
   const [showPassage, setShowPassage] = useState(true);
   const [vocabOpen, setVocabOpen] = useState(false);
@@ -273,52 +272,67 @@ export default function PracticeInner() {
             <Button onClick={() => router.push("/materials")}>Go to Materials</Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            {practiceMaterials.map((m) => {
-              const Icon = TYPE_ICONS[m.type];
-              const mVocab = vocab.filter(v => v.materialId === m.id);
-              const lastSession = sessions
-                .filter(s => s.completed && s.materialId === m.id)
-                .sort((a, b) => b.date.localeCompare(a.date))[0];
-              return (
-                <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="p-4 flex items-center gap-3">
-                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
-                      <Icon size={18} />
+          <div className="space-y-6">
+            {(["listening", "reading", "writing"] as const)
+              .map(type => ({ type, items: practiceMaterials.filter(m => m.type === type) }))
+              .filter(({ items }) => items.length > 0)
+              .map(({ type, items }) => {
+                const Icon = TYPE_ICONS[type];
+                return (
+                  <div key={type}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center border", TYPE_COLORS[type])}>
+                        <Icon size={13} />
+                      </div>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider capitalize">{type}</span>
+                      <span className="text-xs text-gray-300">{items.length}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
-                      <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions · No timer</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                      <button
-                        onClick={() => setPreviewVocabId(m.id)}
-                        className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
-                      >
-                        <BookMarked size={13} />
-                        Vocab
-                        {mVocab.length > 0 && (
-                          <span className="bg-accent text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
-                            {mVocab.length}
-                          </span>
-                        )}
-                      </button>
-                      {(lastSession || isCutie) && (
-                        <button
-                          onClick={() => setReviewSession({ materialId: m.id, answers: lastSession?.answers ?? {}, date: lastSession?.date ?? "" })}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
-                        >
-                          Review
-                        </button>
-                      )}
-                      <Button size="sm" onClick={() => router.push(`/test?tab=practice&material=${m.id}`)}>
-                        Practice <ChevronRight size={13} />
-                      </Button>
+                    <div className="space-y-2">
+                      {items.map((m) => {
+                        const mVocab = vocab.filter(v => v.materialId === m.id);
+                        const lastSession = sessions
+                          .filter(s => s.completed && s.materialId === m.id)
+                          .sort((a, b) => b.date.localeCompare(a.date))[0];
+                        return (
+                          <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-4 flex items-center gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+                                <p className="text-xs text-gray-500">{m.questions.length} questions · No timer</p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                                <button
+                                  onClick={() => setPreviewVocabId(m.id)}
+                                  className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
+                                >
+                                  <BookMarked size={13} />
+                                  Vocab
+                                  {mVocab.length > 0 && (
+                                    <span className="bg-accent text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
+                                      {mVocab.length}
+                                    </span>
+                                  )}
+                                </button>
+                                {(lastSession || isCutie) && (
+                                  <button
+                                    onClick={() => setReviewSession({ materialId: m.id, answers: lastSession?.answers ?? {}, date: lastSession?.date ?? "" })}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+                                  >
+                                    Review
+                                  </button>
+                                )}
+                                <Button size="sm" onClick={() => router.push(`/test?tab=practice&material=${m.id}`)}>
+                                  Practice <ChevronRight size={13} />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         )}
 
@@ -364,7 +378,6 @@ export default function PracticeInner() {
             <Button className="flex-1" onClick={() => {
               setPhase("active");
               setAnswers({});
-              setCheckedGroups(new Set());
               setCurrentGroupIdx(0);
               setTimeSpent(0);
               startTimeRef.current = Date.now();
@@ -382,7 +395,6 @@ export default function PracticeInner() {
   const { section: currentSection, group: currentGroup } = allGroups[groupIdx];
   const totalGroups = allGroups.length;
   const hasPassage = material.type !== "writing";
-  const isChecked = checkedGroups.has(groupIdx);
   const answered = Object.keys(answers).filter(k => answers[k]).length;
   const totalQ = material.questions.length;
 
@@ -584,10 +596,10 @@ export default function PracticeInner() {
                   onAnswer={v => setAnswers(a => ({ ...a, [q.id]: v }))}
                   type={material.type}
                   forceText={!!currentGroup.questionImage}
-                  isChecked={isChecked}
-                  isCorrect={isChecked && checkAnswer(answers[q.id] ?? "", material.answerKey[q.id] ?? "")}
-                  correctAnswer={material.answerKey[q.id] ?? ""}
-                  explanation={material.explanations?.[q.id]}
+                  isChecked={false}
+                  isCorrect={false}
+                  correctAnswer=""
+                  explanation={undefined}
                 />
               ))}
             </div>
@@ -599,9 +611,6 @@ export default function PracticeInner() {
               {material.questions.map(qq => {
                 const qGrpIdx = groupIdxForQuestion(qq.id);
                 const isActive = qGrpIdx === groupIdx;
-                const isGroupChecked = checkedGroups.has(qGrpIdx);
-                const isCorrect = isGroupChecked && checkAnswer(answers[qq.id] ?? "", material.answerKey[qq.id] ?? "");
-                const isWrong = isGroupChecked && !!answers[qq.id] && !checkAnswer(answers[qq.id] ?? "", material.answerKey[qq.id] ?? "");
                 return (
                   <button
                     key={qq.id}
@@ -609,8 +618,6 @@ export default function PracticeInner() {
                     className={cn(
                       "w-8 h-8 rounded-lg text-xs font-medium transition-all",
                       isActive ? "bg-accent text-white"
-                        : isCorrect ? "bg-green-100 text-green-700 border border-green-200"
-                        : isWrong ? "bg-red-100 text-red-600 border border-red-200"
                         : answers[qq.id] ? "bg-accent-lightest text-accent-darker border border-accent/30"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     )}
@@ -635,16 +642,7 @@ export default function PracticeInner() {
               >
                 <ChevronRight size={18} className="text-gray-600" />
               </button>
-              <Button
-                variant={isChecked ? "secondary" : "primary"}
-                className="flex-1"
-                onClick={() => setCheckedGroups(prev => { const n = new Set(prev); n.add(groupIdx); return n; })}
-              >
-                {isChecked ? "✓ Checked" : "Check Answers"}
-              </Button>
-              {groupIdx === totalGroups - 1 && (
-                <Button className="flex-1" onClick={finish}>Finish</Button>
-              )}
+              <Button className="flex-1" onClick={finish}>Submit</Button>
             </div>
           </div>
         </div>
