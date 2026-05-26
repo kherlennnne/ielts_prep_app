@@ -12,6 +12,7 @@ export interface CalendarEvent {
   type: EventType;
   completed: boolean;
   notes?: string;
+  important?: boolean;
 }
 
 export interface TestSession {
@@ -38,6 +39,7 @@ export interface AnswerLocation {
 export interface Material {
   id: string;
   title: string;
+  groupName?: string;
   type: "listening" | "reading" | "writing";
   testMode?: "mock" | "practice";
   content?: string;

@@ -103,22 +103,35 @@ export function TestReview({ materialId, answers, activeQuestionId, onQuestionSe
     );
   }
 
-  // Build groups list: use sections/groups if available, else a single flat group
-  const allGroups: { group: QuestionGroup }[] = [];
+  // Build section-grouped structure
+  type SectionEntry = { id: string; title?: string; groups: QuestionGroup[] };
+  const allSections: SectionEntry[] = [];
   if (material.sections?.length) {
-    for (const sec of material.sections) {
-      for (const grp of sec.groups) allGroups.push({ group: grp });
-    }
+    for (const sec of material.sections) allSections.push({ id: sec.id, title: sec.title, groups: sec.groups });
   }
-  if (!allGroups.length) {
-    allGroups.push({ group: { id: "default", questions: material.questions } });
+  if (!allSections.length) {
+    allSections.push({ id: "default", groups: [{ id: "default", questions: material.questions }] });
   }
+
+  const multiSection = allSections.length > 1;
 
   return (
     <div>
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Answer Review</p>
-      <div className="space-y-5">
-        {allGroups.map(({ group }) => (
+      <div className="space-y-6">
+        {allSections.map((sec, secIdx) => (
+          <div key={sec.id}>
+            {multiSection && (
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-px flex-1 bg-gray-100" />
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-2">
+                  {sec.title || `Passage ${secIdx + 1}`}
+                </span>
+                <div className="h-px flex-1 bg-gray-100" />
+              </div>
+            )}
+            <div className="space-y-5">
+            {sec.groups.map(group => (
           <div key={group.id}>
             {/* Group instruction */}
             {group.instruction && (
@@ -321,6 +334,9 @@ export function TestReview({ materialId, answers, activeQuestionId, onQuestionSe
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ))}
             </div>
           </div>
         ))}

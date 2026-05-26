@@ -12,6 +12,7 @@ function materialToDb(m: Material) {
   return {
     id: m.id,
     title: m.title,
+    group_name: m.groupName ?? null,
     type: m.type,
     test_mode: m.testMode ?? "mock",
     content: m.content ?? null,
@@ -30,6 +31,7 @@ function dbToMaterial(row: Record<string, unknown>): Material {
   return {
     id: row.id as string,
     title: row.title as string,
+    groupName: row.group_name as string | undefined,
     type: row.type as Material["type"],
     testMode: (row.test_mode as Material["testMode"]) ?? "mock",
     content: row.content as string | undefined,
@@ -88,6 +90,7 @@ function eventToDb(e: CalendarEvent) {
     type: e.type,
     completed: e.completed,
     notes: e.notes ?? null,
+    important: e.important ?? null,
   };
 }
 
@@ -101,6 +104,7 @@ function dbToEvent(row: Record<string, unknown>): CalendarEvent {
     type: row.type as CalendarEvent["type"],
     completed: row.completed as boolean,
     notes: row.notes as string | undefined,
+    important: row.important as boolean | undefined,
   };
 }
 

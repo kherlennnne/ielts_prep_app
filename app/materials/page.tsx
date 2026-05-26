@@ -72,7 +72,7 @@ function groupToForm(grp: QuestionGroup, answerKey: Record<string, string>): For
   return { id: grp.id, instruction: grp.instruction ?? "", tip: grp.tip ?? "", rawQuestions, rawAnswers, questionImage: grp.questionImage };
 }
 
-function materialToForm(m: Material): { title: string; type: Material["type"]; testMode: Material["testMode"]; duration: number; sections: FormSection[] } {
+function materialToForm(m: Material): { title: string; groupName: string; type: Material["type"]; testMode: Material["testMode"]; duration: number; sections: FormSection[] } {
   const sections: FormSection[] = (m.sections?.length ? m.sections : [{
     id: generateId(), title: undefined, content: m.content, passageImage: m.passageImage,
     youtubeUrl: undefined, youtubeStart: undefined, youtubeEnd: undefined,
@@ -89,7 +89,7 @@ function materialToForm(m: Material): { title: string; type: Material["type"]; t
     groups: sec.groups.map(g => groupToForm(g, m.answerKey)),
     collapsed: false,
   }));
-  return { title: m.title, type: m.type, testMode: m.testMode ?? "mock", duration: m.duration ?? 60, sections };
+  return { title: m.title, groupName: m.groupName ?? "", type: m.type, testMode: m.testMode ?? "mock", duration: m.duration ?? 60, sections };
 }
 
 export default function MaterialsPage() {
@@ -98,7 +98,7 @@ export default function MaterialsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ title: "", type: "reading" as Material["type"], testMode: "mock" as Material["testMode"], duration: 60, sections: [defaultSection()] });
+  const [form, setForm] = useState({ title: "", groupName: "", type: "reading" as Material["type"], testMode: "mock" as Material["testMode"], duration: 60, sections: [defaultSection()] });
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [parseError, setParseError] = useState("");
 
@@ -241,7 +241,7 @@ export default function MaterialsPage() {
   function handleSave() {
     if (!parsed) return;
     const data = {
-      title: form.title, type: form.type, testMode: form.testMode,
+      title: form.title, groupName: form.groupName || undefined, type: form.type, testMode: form.testMode,
       content: form.sections[0]?.content,
       passageImage: form.sections[0]?.passageImage,
       sections: parsed.sections,
@@ -259,7 +259,7 @@ export default function MaterialsPage() {
 
   function closeModal() {
     setShowAdd(false); setEditingId(null); setStep(1); setParsed(null); setParseError("");
-    setForm({ title: "", type: "reading", testMode: "mock", duration: 60, sections: [defaultSection()] });
+    setForm({ title: "", groupName: "", type: "reading", testMode: "mock", duration: 60, sections: [defaultSection()] });
   }
 
   // Section helpers
@@ -382,6 +382,13 @@ export default function MaterialsPage() {
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 placeholder="Cambridge IELTS 17 – Test 1 Reading"
                 className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Test Group <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+              <input value={form.groupName} onChange={e => setForm(f => ({ ...f, groupName: e.target.value }))}
+                placeholder="e.g. Cambridge IELTS 17 – Test 1"
+                className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all" />
+              <p className="mt-1 text-[11px] text-gray-400">Group multiple passages from the same test together</p>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mode</label>

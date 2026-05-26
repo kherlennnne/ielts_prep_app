@@ -211,7 +211,7 @@ export function PassageAnnotator({
           }
 
           if (v) {
-            const vocabBase = v.note ? "bg-yellow-200 text-yellow-900" : "bg-yellow-100 text-yellow-900";
+            const vocabBase = v.note ? "bg-blue-100 text-blue-900" : "bg-blue-50 text-blue-800";
             return (
               <mark
                 key={i}

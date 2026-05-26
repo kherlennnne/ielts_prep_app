@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, isToday, addMonths, subMonths } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, CheckCircle2, Star } from "lucide-react";
 import { useStore, CalendarEvent, EventType } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -21,7 +21,7 @@ export default function CalendarPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showDetail, setShowDetail] = useState<CalendarEvent | null>(null);
 
-  const [form, setForm] = useState({ title: "", time: "09:00", duration: 60, type: "study" as EventType, notes: "" });
+  const [form, setForm] = useState({ title: "", time: "09:00", duration: 60, type: "study" as EventType, notes: "", important: false });
 
   const monthStart = startOfMonth(current);
   const monthEnd = endOfMonth(current);
@@ -37,9 +37,9 @@ export default function CalendarPage() {
     addEvent({
       id: generateId(), date: format(selected, "yyyy-MM-dd"),
       title: form.title, time: form.time, duration: form.duration,
-      type: form.type, completed: false, notes: form.notes,
+      type: form.type, completed: false, notes: form.notes, important: form.important,
     });
-    setForm({ title: "", time: "09:00", duration: 60, type: "study", notes: "" });
+    setForm({ title: "", time: "09:00", duration: 60, type: "study", notes: "", important: false });
     setShowAdd(false);
   }
 
@@ -87,11 +87,14 @@ export default function CalendarPage() {
                     !isSelected && !todayDay ? "text-gray-900" : "")}>
                     {format(day, "d")}
                   </span>
-                  {/* Event dots — max 3 */}
-                  <div className="flex gap-0.5 justify-center">
-                    {evs.slice(0, 3).map((e, idx) => (
-                      <div key={idx} className={cn("w-1 h-1 rounded-full", EVENT_DOT[e.type])} />
-                    ))}
+                  {/* Event dots — max 3, star if any are important */}
+                  <div className="flex gap-0.5 justify-center items-center">
+                    {evs.some(e => e.important)
+                      ? <Star size={8} className="text-amber-400 fill-amber-400" />
+                      : evs.slice(0, 3).map((e, idx) => (
+                          <div key={idx} className={cn("w-1 h-1 rounded-full", EVENT_DOT[e.type])} />
+                        ))
+                    }
                   </div>
                 </button>
               );
@@ -119,7 +122,10 @@ export default function CalendarPage() {
                     ev.type === "study" ? "bg-blue-400" : ev.type === "test" ? "bg-red-400" :
                     ev.type === "review" ? "bg-amber-400" : "bg-green-400")} />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm">{ev.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-gray-900 text-sm">{ev.title}</p>
+                      {ev.important && <Star size={11} className="text-amber-400 fill-amber-400 flex-shrink-0" />}
+                    </div>
                     <p className="text-xs text-gray-500">{ev.time} · {ev.duration} min · <span className="capitalize">{ev.type}</span></p>
                   </div>
                   {ev.completed ? <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" /> :
@@ -179,6 +185,19 @@ export default function CalendarPage() {
               rows={2} placeholder="Any notes..."
               className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none" />
           </div>
+          <button
+            type="button"
+            onClick={() => setForm(f => ({ ...f, important: !f.important }))}
+            className={cn(
+              "w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border transition-all text-sm font-medium",
+              form.important
+                ? "bg-amber-50 border-amber-300 text-amber-700"
+                : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
+            )}
+          >
+            <Star size={15} className={form.important ? "fill-amber-400 text-amber-400" : "text-gray-400"} />
+            Mark as important date
+          </button>
           <Button className="w-full" onClick={handleAdd}>Add Session</Button>
         </div>
       </Modal>
@@ -191,6 +210,11 @@ export default function CalendarPage() {
               <span className={cn("px-3 py-1 rounded-full text-xs font-medium border capitalize", EVENT_COLORS[showDetail.type])}>{showDetail.type}</span>
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{showDetail.time}</span>
               <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{showDetail.duration} min</span>
+              {showDetail.important && (
+                <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                  <Star size={10} className="fill-amber-400 text-amber-400" /> Important
+                </span>
+              )}
             </div>
             {showDetail.notes && <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3">{showDetail.notes}</p>}
             <div className="flex gap-2 pt-2">

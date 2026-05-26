@@ -77,7 +77,9 @@ export default function ReviewPage() {
               const material = materials.find(m => m.id === session.materialId)
                 ?? materials.find(m => m.type === session.type && m.questions.some(q => session.answers[q.id] !== undefined));
               const isPractice = material?.testMode === "practice";
-              const correct = session.score ?? 0;
+              const correct = material
+                ? material.questions.reduce((n, q) => n + (checkAnswer(session.answers[q.id] ?? "", material.answerKey[q.id] ?? "") ? 1 : 0), 0)
+                : session.score ?? 0;
               const total = session.maxScore;
               // Only show band score for mock tests
               const band = !isPractice && session.type !== "writing"
@@ -306,7 +308,7 @@ function ReviewQuestions({ material, sessionId, sessionAnswers, correctAnswers, 
             <div className="space-y-2">
               {group.questions.map(q => {
                 const given = sessionAnswers[q.id] ?? "";
-                const expected = correctAnswers?.[q.id] ?? material.answerKey[q.id] ?? "";
+                const expected = material.answerKey[q.id] ?? correctAnswers?.[q.id] ?? "";
                 const isCorrect = checkAnswer(given, expected);
                 const explanation = material.explanations?.[q.id] ?? "";
                 const isEditingThis = editingExplanation?.sessionId === sessionId && editingExplanation?.questionId === q.id;

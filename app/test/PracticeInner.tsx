@@ -11,8 +11,8 @@ import { PassageAnnotator, TextAnnotation, AnnotationColor, AnnotationToolbar } 
 import { checkAnswer, getYouTubeId, generateId, formatTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
-  ChevronLeft, ChevronRight, CheckCircle2, XCircle, BookOpen,
-  FileText, Headphones, PenLine, BookMarked, X,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle2, XCircle, BookOpen,
+  FileText, Headphones, PenLine, BookMarked, X, Lightbulb,
 } from "lucide-react";
 import { TestReview } from "@/components/ui/TestReview";
 
@@ -120,7 +120,7 @@ export default function PracticeInner() {
 
   type GroupEntry = {
     section: Section | null;
-    group: { id: string; instruction?: string; questionImage?: string; questions: Question[] };
+    group: { id: string; instruction?: string; questionImage?: string; tip?: string; questions: Question[] };
   };
 
   const allGroups: GroupEntry[] = [];
@@ -272,68 +272,15 @@ export default function PracticeInner() {
             <Button onClick={() => router.push("/materials")}>Go to Materials</Button>
           </div>
         ) : (
-          <div className="space-y-6">
-            {(["listening", "reading", "writing"] as const)
-              .map(type => ({ type, items: practiceMaterials.filter(m => m.type === type) }))
-              .filter(({ items }) => items.length > 0)
-              .map(({ type, items }) => {
-                const Icon = TYPE_ICONS[type];
-                return (
-                  <div key={type}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center border", TYPE_COLORS[type])}>
-                        <Icon size={13} />
-                      </div>
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider capitalize">{type}</span>
-                      <span className="text-xs text-gray-300">{items.length}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {items.map((m) => {
-                        const mVocab = vocab.filter(v => v.materialId === m.id);
-                        const lastSession = sessions
-                          .filter(s => s.completed && s.materialId === m.id)
-                          .sort((a, b) => b.date.localeCompare(a.date))[0];
-                        return (
-                          <div key={m.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 flex items-center gap-3">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
-                                <p className="text-xs text-gray-500">{m.questions.length} questions · No timer</p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                                <button
-                                  onClick={() => setPreviewVocabId(m.id)}
-                                  className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
-                                >
-                                  <BookMarked size={13} />
-                                  Vocab
-                                  {mVocab.length > 0 && (
-                                    <span className="bg-accent text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
-                                      {mVocab.length}
-                                    </span>
-                                  )}
-                                </button>
-                                {(lastSession || isCutie) && (
-                                  <button
-                                    onClick={() => setReviewSession({ materialId: m.id, answers: lastSession?.answers ?? {}, date: lastSession?.date ?? "" })}
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
-                                  >
-                                    Review
-                                  </button>
-                                )}
-                                <Button size="sm" onClick={() => router.push(`/test?tab=practice&material=${m.id}`)}>
-                                  Practice <ChevronRight size={13} />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+          <PracticeMaterialList
+            practiceMaterials={practiceMaterials}
+            vocab={vocab}
+            sessions={sessions}
+            isCutie={isCutie}
+            onVocabPreview={setPreviewVocabId}
+            onReview={(materialId, answers, date) => setReviewSession({ materialId, answers, date })}
+            onStart={(id) => router.push(`/test?tab=practice&material=${id}`)}
+          />
         )}
 
         {/* Pre-test vocab drawer */}
@@ -581,6 +528,12 @@ export default function PracticeInner() {
                 <p className="text-xs text-accent-darker leading-relaxed">{currentGroup.instruction}</p>
               </div>
             )}
+            {currentGroup.tip && (
+              <div className="mb-5 flex items-start gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                <Lightbulb size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-800 leading-relaxed">{currentGroup.tip}</p>
+              </div>
+            )}
             {currentGroup.questionImage && (
               <div className="mb-5 rounded-xl overflow-hidden border border-gray-100">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -809,6 +762,148 @@ function PracticeQuestionCard({ question, answer, onAnswer, type, forceText, isC
         )}
       />
       <FeedbackBadge />
+    </div>
+  );
+}
+
+// ─── Practice Material List ───────────────────────────────────────────────────
+import type { Material, VocabWord as VocabWordType, TestSession } from "@/lib/store";
+
+function PracticeMaterialList({ practiceMaterials, vocab, sessions, isCutie, onVocabPreview, onReview, onStart }: {
+  practiceMaterials: Material[];
+  vocab: VocabWordType[];
+  sessions: TestSession[];
+  isCutie: boolean;
+  onVocabPreview: (id: string) => void;
+  onReview: (materialId: string, answers: Record<string, string>, date: string) => void;
+  onStart: (id: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  function MaterialRow({ m }: { m: Material }) {
+    const mVocab = vocab.filter(v => v.materialId === m.id);
+    const completedSessions = sessions
+      .filter(s => s.completed && s.materialId === m.id)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const lastSession = completedSessions[0];
+    const attempts = completedSessions.length;
+
+    const bestCorrect = attempts > 0
+      ? Math.max(...completedSessions.map(s =>
+          m.questions.reduce((n, q) => n + (checkAnswer(s.answers[q.id] ?? "", m.answerKey[q.id] ?? "") ? 1 : 0), 0)
+        ))
+      : null;
+
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-4 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+            <p className="text-xs text-gray-500">{m.questions.length} questions · No timer</p>
+            {attempts > 0 && (
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="text-[11px] text-gray-400">{attempts} attempt{attempts !== 1 ? "s" : ""}</span>
+                <span className="text-gray-200">·</span>
+                <span className="text-[11px] font-medium text-accent-darker">
+                  Best: {bestCorrect}/{m.questions.length}
+                </span>
+                <span className="text-gray-200">·</span>
+                <span className="text-[11px] text-gray-400">{lastSession.date}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+            <button
+              onClick={() => onVocabPreview(m.id)}
+              className="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-accent-lightest hover:text-accent-darker border border-gray-200 hover:border-accent/30 transition-colors"
+            >
+              <BookMarked size={13} />
+              Vocab
+              {mVocab.length > 0 && (
+                <span className="bg-accent text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none">
+                  {mVocab.length}
+                </span>
+              )}
+            </button>
+            {(lastSession || isCutie) && (
+              <button
+                onClick={() => onReview(m.id, lastSession?.answers ?? {}, lastSession?.date ?? "")}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+              >
+                Review
+              </button>
+            )}
+            <Button size="sm" onClick={() => onStart(m.id)}>
+              Practice <ChevronRight size={13} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {(["listening", "reading", "writing"] as const)
+        .map(type => ({ type, items: practiceMaterials.filter(m => m.type === type) }))
+        .filter(({ items }) => items.length > 0)
+        .map(({ type, items }) => {
+          const Icon = TYPE_ICONS[type];
+          // Split into named groups and ungrouped
+          const groupMap = new Map<string, Material[]>();
+          const ungrouped: Material[] = [];
+          for (const m of items) {
+            if (m.groupName) {
+              if (!groupMap.has(m.groupName)) groupMap.set(m.groupName, []);
+              groupMap.get(m.groupName)!.push(m);
+            } else {
+              ungrouped.push(m);
+            }
+          }
+          return (
+            <div key={type}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className={cn("w-6 h-6 rounded-lg flex items-center justify-center border", TYPE_COLORS[type])}>
+                  <Icon size={13} />
+                </div>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider capitalize">{type}</span>
+                <span className="text-xs text-gray-300">{items.length}</span>
+              </div>
+              <div className="space-y-2">
+                {Array.from(groupMap.entries()).map(([groupName, mats]) => {
+                  const key = `${type}:${groupName}`;
+                  const isCollapsed = collapsed[key] ?? false;
+                  const doneCount = mats.filter(m => sessions.some(s => s.completed && s.materialId === m.id)).length;
+                  return (
+                    <div key={groupName} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                      <button
+                        onClick={() => setCollapsed(c => ({ ...c, [key]: !isCollapsed }))}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0 text-left">
+                          <p className="font-semibold text-gray-900 text-sm">{groupName}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{mats.length} passage{mats.length !== 1 ? "s" : ""}{doneCount > 0 ? ` · ${doneCount}/${mats.length} done` : ""}</p>
+                        </div>
+                        {doneCount === mats.length && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            <CheckCircle2 size={10} /> All done
+                          </span>
+                        )}
+                        {isCollapsed ? <ChevronDown size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronUp size={16} className="text-gray-400 flex-shrink-0" />}
+                      </button>
+                      {!isCollapsed && (
+                        <div className="border-t border-gray-100 px-3 pb-3 pt-2 space-y-2">
+                          {mats.map(m => <MaterialRow key={m.id} m={m} />)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {ungrouped.map(m => <MaterialRow key={m.id} m={m} />)}
+              </div>
+            </div>
+          );
+        })}
     </div>
   );
 }

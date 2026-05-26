@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useStore, Question } from "@/lib/store";
+import { useStore, Question, TestSession } from "@/lib/store";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { PassageAnnotator, TextAnnotation, AnnotationColor, AnnotationToolbar } from "@/components/ui/PassageAnnotator";
@@ -9,7 +9,7 @@ import { HighlightablePassage } from "@/components/ui/HighlightablePassage";
 import { generateId, formatTime, getBandScore, checkAnswer, getYouTubeId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
-  ChevronLeft, ChevronRight, Clock, AlertTriangle, CheckCircle2, FlaskConical,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock, AlertTriangle, CheckCircle2, FlaskConical,
   FileText, Headphones, PenLine,
 } from "lucide-react";
 import { TestReview } from "@/components/ui/TestReview";
@@ -278,62 +278,29 @@ export default function TestInner() {
 
   // ─── No material selected ────────────────────────────────────────────────────
   if (!material) {
+    // Build groups: named groups first, then ungrouped materials
+    const groupMap = new Map<string, typeof mockMaterials>();
+    const ungrouped: typeof mockMaterials = [];
+    for (const m of mockMaterials) {
+      if (m.groupName) {
+        if (!groupMap.has(m.groupName)) groupMap.set(m.groupName, []);
+        groupMap.get(m.groupName)!.push(m);
+      } else {
+        ungrouped.push(m);
+      }
+    }
+
     return (
-      <div className="px-4 lg:px-8">
-        {mockMaterials.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
-            <FlaskConical size={36} className="text-gray-300 mx-auto mb-3" />
-            <p className="font-medium text-gray-500 mb-1">No mock test materials yet</p>
-            <p className="text-sm text-gray-400 mb-4">Add a material and set it to Mock Test</p>
-            <Button onClick={() => router.push("/materials")}>Go to Materials</Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {mockMaterials.map((m) => {
-              const Icon = TYPE_ICONS[m.type];
-              const lastSession = sessions
-                .filter(s => s.completed && s.materialId === m.id)
-                .sort((a, b) => b.date.localeCompare(a.date))[0];
-              return (
-                <div key={m.id} className={cn(
-                  "rounded-2xl border shadow-sm overflow-hidden",
-                  lastSession ? "bg-green-50 border-green-200" : "bg-white border-gray-100"
-                )}>
-                  <div className="p-4 flex items-center gap-3">
-                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
-                      <Icon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
-                        {lastSession && (
-                          <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full">
-                            <CheckCircle2 size={10} /> Done
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                      {(lastSession || isCutie) && (
-                        <button
-                          onClick={() => setReviewSession({ materialId: m.id, answers: lastSession?.answers ?? {}, date: lastSession?.date ?? "" })}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
-                        >
-                          Review
-                        </button>
-                      )}
-                      <Button size="sm" onClick={() => router.push(`/test?tab=mock&material=${m.id}`)}>
-                        Start <ChevronRight size={13} />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <MockMaterialList
+        groupMap={groupMap}
+        ungrouped={ungrouped}
+        sessions={sessions}
+        isCutie={isCutie}
+        onReview={(materialId, answers, date) => setReviewSession({ materialId, answers, date })}
+        onStart={(id) => router.push(`/test?tab=mock&material=${id}`)}
+        onGoToMaterials={() => router.push("/materials")}
+        isEmpty={mockMaterials.length === 0}
+      />
     );
   }
 
@@ -638,6 +605,107 @@ export default function TestInner() {
       <div className="px-4 lg:px-8">
         <Button onClick={() => setPhase("intro")} size="lg" className="w-full">Start Test</Button>
       </div>
+    </div>
+  );
+}
+
+// ─── Mock Material List ───────────────────────────────────────────────────────
+function MockMaterialList({ groupMap, ungrouped, sessions, isCutie, onReview, onStart, onGoToMaterials, isEmpty }: {
+  groupMap: Map<string, { id: string; title: string; type: "listening" | "reading" | "writing"; questions: { id: string }[]; groupName?: string }[]>;
+  ungrouped: { id: string; title: string; type: "listening" | "reading" | "writing"; questions: { id: string }[] }[];
+  sessions: TestSession[];
+  isCutie: boolean;
+  onReview: (materialId: string, answers: Record<string, string>, date: string) => void;
+  onStart: (id: string) => void;
+  onGoToMaterials: () => void;
+  isEmpty: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  if (isEmpty) {
+    return (
+      <div className="px-4 lg:px-8">
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
+          <FlaskConical size={36} className="text-gray-300 mx-auto mb-3" />
+          <p className="font-medium text-gray-500 mb-1">No mock test materials yet</p>
+          <p className="text-sm text-gray-400 mb-4">Add a material and set it to Mock Test</p>
+          <Button onClick={onGoToMaterials}>Go to Materials</Button>
+        </div>
+      </div>
+    );
+  }
+
+  function MaterialRow({ m }: { m: typeof ungrouped[0] }) {
+    const Icon = TYPE_ICONS[m.type];
+    const lastSession = sessions
+      .filter(s => s.completed && s.materialId === m.id)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return (
+      <div className={cn("rounded-2xl border shadow-sm overflow-hidden", lastSession ? "bg-green-50 border-green-200" : "bg-white border-gray-100")}>
+        <div className="p-4 flex items-center gap-3">
+          <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
+            <Icon size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+              {lastSession && (
+                <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full">
+                  <CheckCircle2 size={10} /> Done
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+            {(lastSession || isCutie) && (
+              <button
+                onClick={() => onReview(m.id, lastSession?.answers ?? {}, lastSession?.date ?? "")}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 transition-colors"
+              >
+                Review
+              </button>
+            )}
+            <Button size="sm" onClick={() => onStart(m.id)}>
+              Start <ChevronRight size={13} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 lg:px-8 space-y-3">
+      {Array.from(groupMap.entries()).map(([groupName, mats]) => {
+        const isCollapsed = collapsed[groupName] ?? false;
+        const doneCount = mats.filter(m => sessions.some(s => s.completed && s.materialId === m.id)).length;
+        return (
+          <div key={groupName} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setCollapsed(c => ({ ...c, [groupName]: !isCollapsed }))}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex-1 min-w-0 text-left">
+                <p className="font-semibold text-gray-900 text-sm">{groupName}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{mats.length} passage{mats.length !== 1 ? "s" : ""}{doneCount > 0 ? ` · ${doneCount}/${mats.length} done` : ""}</p>
+              </div>
+              {doneCount === mats.length && mats.length > 0 && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  <CheckCircle2 size={10} /> All done
+                </span>
+              )}
+              {isCollapsed ? <ChevronDown size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronUp size={16} className="text-gray-400 flex-shrink-0" />}
+            </button>
+            {!isCollapsed && (
+              <div className="border-t border-gray-100 px-3 pb-3 pt-2 space-y-2">
+                {mats.map(m => <MaterialRow key={m.id} m={m} />)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {ungrouped.map(m => <MaterialRow key={m.id} m={m} />)}
     </div>
   );
 }
