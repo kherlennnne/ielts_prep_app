@@ -74,7 +74,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 ALTER TABLE sessions   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE events     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE vocab      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tips       DISABLE ROW LEVEL SECURITY;`
+ALTER TABLE tips       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions DISABLE ROW LEVEL SECURITY;`
                 }</pre>
               )}
               {(syncError.includes("42P01") || syncError.includes("does not exist")) && (
@@ -112,7 +113,8 @@ ALTER TABLE tips       DISABLE ROW LEVEL SECURITY;`
 ALTER TABLE sessions   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE events     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE vocab      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tips       DISABLE ROW LEVEL SECURITY;`
+ALTER TABLE tips       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions DISABLE ROW LEVEL SECURITY;`
               }</pre>
             )}
             <button onClick={checkAndLoad} className="underline opacity-80 hover:opacity-100 transition-opacity">

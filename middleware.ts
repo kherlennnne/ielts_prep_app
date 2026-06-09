@@ -8,10 +8,12 @@ import {
   REMEMBER_COOKIE_NAME,
   REMEMBER_ME_MAX_AGE_SECONDS,
   RESTRICTED_USERS,
+  SESSION_COOKIE_NAME,
   USER_COOKIE_NAME,
 } from "@/lib/auth";
+import { recordUserSessionActivity } from "@/lib/userSessionTracking";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const username = process.env.BASIC_AUTH_USERNAME;
   const password = process.env.BASIC_AUTH_PASSWORD;
@@ -30,11 +32,24 @@ export function middleware(request: NextRequest) {
     isAuthed &&
     (!hasValidLastActive || Date.now() - lastActive > INACTIVITY_TIMEOUT_SECONDS * 1000);
 
-  const clearAuthAndRedirectToLogin = () => {
+  const clearAuthAndRedirectToLogin = async () => {
+    await recordUserSessionActivity({
+      sessionId: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+      username: request.cookies.get(USER_COOKIE_NAME)?.value,
+      lastActiveMs: hasValidLastActive ? lastActive : undefined,
+      endReason: "timeout",
+    });
+
     const loginUrl = new URL(LOGIN_PATH, request.url);
     loginUrl.searchParams.set("next", pathname);
     const response = NextResponse.redirect(loginUrl);
-    const allCookies = [AUTH_COOKIE_NAME, REMEMBER_COOKIE_NAME, LAST_ACTIVE_COOKIE_NAME, USER_COOKIE_NAME];
+    const allCookies = [
+      AUTH_COOKIE_NAME,
+      REMEMBER_COOKIE_NAME,
+      LAST_ACTIVE_COOKIE_NAME,
+      SESSION_COOKIE_NAME,
+      USER_COOKIE_NAME,
+    ];
     for (const name of allCookies) {
       response.cookies.set({
         name,
@@ -66,10 +81,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  const nowMs = Date.now();
+  await recordUserSessionActivity({
+    sessionId: request.cookies.get(SESSION_COOKIE_NAME)?.value,
+    username: currentUser,
+    lastActiveMs: hasValidLastActive ? lastActive : undefined,
+    nowMs,
+  });
+
   const response = NextResponse.next();
   response.cookies.set({
     name: LAST_ACTIVE_COOKIE_NAME,
-    value: Date.now().toString(),
+    value: nowMs.toString(),
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

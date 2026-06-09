@@ -5,8 +5,10 @@ import {
   LAST_ACTIVE_COOKIE_NAME,
   REMEMBER_COOKIE_NAME,
   REMEMBER_ME_MAX_AGE_SECONDS,
+  SESSION_COOKIE_NAME,
   USER_COOKIE_NAME,
 } from "@/lib/auth";
+import { createUserSession } from "@/lib/userSessionTracking";
 
 function resolveUser(username: string, password: string): string | null {
   if (
@@ -45,7 +47,17 @@ export async function POST(request: NextRequest) {
 
   const response = NextResponse.json({ ok: true });
   const rememberMe = Boolean(body.rememberMe);
-  const now = Date.now().toString();
+  const nowMs = Date.now();
+  const now = nowMs.toString();
+  const sessionId = crypto.randomUUID();
+
+  await createUserSession({
+    sessionId,
+    username: resolvedUser,
+    rememberMe,
+    userAgent: request.headers.get("user-agent"),
+    nowMs,
+  });
 
   const commonCookieOptions = {
     httpOnly: true as const,
@@ -58,6 +70,7 @@ export async function POST(request: NextRequest) {
   response.cookies.set({ name: AUTH_COOKIE_NAME, value: AUTH_COOKIE_VALUE, ...commonCookieOptions });
   response.cookies.set({ name: REMEMBER_COOKIE_NAME, value: rememberMe ? "1" : "0", ...commonCookieOptions });
   response.cookies.set({ name: LAST_ACTIVE_COOKIE_NAME, value: now, ...commonCookieOptions });
+  response.cookies.set({ name: SESSION_COOKIE_NAME, value: sessionId, ...commonCookieOptions });
 
   // Non-httpOnly so client components can read it to adjust UI
   response.cookies.set({

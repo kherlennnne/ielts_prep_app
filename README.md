@@ -37,7 +37,8 @@ Session behavior:
 
 - Default sign-in: current browser session only
 - `Remember me`: stays signed in for up to 1 day
-- Auto logout after 30 minutes of inactivity
+- Auto logout after 2 hours of inactivity
+- User login sessions are stored in Supabase `user_sessions` with creation time, last active time, end time, active seconds, user name, and logout reason. Run `supabase/user_sessions.sql` in the Supabase SQL Editor before using this tracking.
 
 ## Deploy to Vercel (easiest)
 
