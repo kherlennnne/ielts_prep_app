@@ -6,6 +6,8 @@ import { formatTime, getBandScore, checkAnswer } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, GraduationCap, StickyNote, Trash2, BookOpen, FlaskConical, Lightbulb, Pencil } from "lucide-react";
 import { useUser } from "@/lib/useUser";
+import { UserBadge } from "@/components/ui/UserBadge";
+import { getUserDisplay } from "@/lib/userDisplay";
 
 export default function ReviewPage() {
   const { sessions, materials, updateMaterial, deleteSession } = useStore();
@@ -14,8 +16,13 @@ export default function ReviewPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "listening" | "reading" | "writing">("all");
   const [modeFilter, setModeFilter] = useState<"all" | "mock" | "practice">("all");
+  const [userFilter, setUserFilter] = useState<string>("all");
   const [editingExplanation, setEditingExplanation] = useState<{ sessionId: string; questionId: string } | null>(null);
   const [draftText, setDraftText] = useState("");
+
+  const sessionUsers = Array.from(
+    new Set(completed.map(s => s.username).filter((u): u is string => Boolean(u)))
+  );
 
   const filtered = completed
     .filter(s => filter === "all" || s.type === filter)
@@ -23,7 +30,8 @@ export default function ReviewPage() {
       if (modeFilter === "all") return true;
       const mat = materials.find(m => m.id === s.materialId);
       return modeFilter === "practice" ? mat?.testMode === "practice" : (mat?.testMode ?? "mock") === "mock";
-    });
+    })
+    .filter(s => userFilter === "all" || s.username === userFilter);
 
   function saveExplanation(materialId: string, questionId: string, text: string) {
     const material = materials.find(m => m.id === materialId);
@@ -63,6 +71,38 @@ export default function ReviewPage() {
             </button>
           ))}
         </div>
+        {sessionUsers.length > 1 && (
+          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+            <button
+              onClick={() => setUserFilter("all")}
+              className={cn(
+                "px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all flex-shrink-0",
+                userFilter === "all"
+                  ? "bg-gray-800 text-white shadow-sm"
+                  : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+              )}
+            >
+              All users
+            </button>
+            {sessionUsers.map(username => {
+              const display = getUserDisplay(username);
+              return (
+                <button
+                  key={username}
+                  onClick={() => setUserFilter(username)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full text-xs font-medium capitalize whitespace-nowrap transition-all flex-shrink-0 border",
+                    userFilter === username
+                      ? display?.badgeClass
+                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                  )}
+                >
+                  {username}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
@@ -86,9 +126,17 @@ export default function ReviewPage() {
                 ? getBandScore(correct, total, session.type as "listening" | "reading")
                 : null;
               const isExpanded = expanded === session.id;
+              const userDisplay = getUserDisplay(session.username);
 
               return (
-                <div key={session.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden relative">
+                <div
+                  key={session.id}
+                  className={cn(
+                    "bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden relative",
+                    userDisplay?.cardBorderClass,
+                    userDisplay?.cardBgClass
+                  )}
+                >
                   <button onClick={() => setExpanded(isExpanded ? null : session.id)}
                     className="w-full p-4 flex items-center gap-4 text-left hover:bg-gray-50 transition-colors">
                     <div className={cn(
@@ -114,6 +162,7 @@ export default function ReviewPage() {
                         )}>
                           {isPractice ? <><BookOpen size={9} /> Practice</> : <><FlaskConical size={9} /> Mock</>}
                         </span>
+                        <UserBadge username={session.username} />
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
                         <span className="text-xs text-gray-500">{session.date}</span>

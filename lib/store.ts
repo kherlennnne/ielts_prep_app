@@ -19,6 +19,7 @@ export interface TestSession {
   id: string;
   date: string;
   type: "listening" | "reading" | "writing";
+  username?: string;
   materialId?: string;
   score?: number;
   maxScore: number;

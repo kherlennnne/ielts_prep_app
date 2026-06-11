@@ -15,6 +15,8 @@ import {
   FileText, Headphones, PenLine, BookMarked, X, Lightbulb,
 } from "lucide-react";
 import { TestReview } from "@/components/ui/TestReview";
+import { UserBadge } from "@/components/ui/UserBadge";
+import { getUserDisplay } from "@/lib/userDisplay";
 
 const TYPE_ICONS = { listening: Headphones, reading: FileText, writing: PenLine };
 const TYPE_COLORS = {
@@ -43,7 +45,7 @@ export default function PracticeInner() {
   const router = useRouter();
   const materialId = searchParams.get("material");
   const { materials, vocab, sessions, addVocab, addEvent, addSession, updateMaterial } = useStore();
-  const { isCutie } = useUser();
+  const { isCutie, username } = useUser();
 
   const practiceMaterials = materials.filter(m => m.testMode === "practice");
   const material = materials.find(m => m.id === materialId);
@@ -396,6 +398,7 @@ export default function PracticeInner() {
       id: generateId(),
       date: currentDate,
       type: material.type,
+      username: username ?? undefined,
       materialId: material.id,
       score: correct,
       maxScore: material.questions.length,
@@ -787,6 +790,7 @@ function PracticeMaterialList({ practiceMaterials, vocab, sessions, isCutie, onV
       .sort((a, b) => b.date.localeCompare(a.date));
     const lastSession = completedSessions[0];
     const attempts = completedSessions.length;
+    const userDisplay = getUserDisplay(lastSession?.username);
 
     const bestCorrect = attempts > 0
       ? Math.max(...completedSessions.map(s =>
@@ -795,10 +799,18 @@ function PracticeMaterialList({ practiceMaterials, vocab, sessions, isCutie, onV
       : null;
 
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className={cn(
+        "rounded-2xl border shadow-sm overflow-hidden",
+        lastSession && userDisplay
+          ? cn(userDisplay.cardBorderClass, userDisplay.cardBgClass, "border-gray-100")
+          : "border-gray-100 bg-white"
+      )}>
         <div className="p-4 flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
+              {lastSession?.username && <UserBadge username={lastSession.username} />}
+            </div>
             <p className="text-xs text-gray-500">{m.questions.length} questions · No timer</p>
             {attempts > 0 && (
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -809,6 +821,28 @@ function PracticeMaterialList({ practiceMaterials, vocab, sessions, isCutie, onV
                 </span>
                 <span className="text-gray-200">·</span>
                 <span className="text-[11px] text-gray-400">{lastSession.date}</span>
+              </div>
+            )}
+            {attempts > 1 && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {completedSessions.slice(0, 4).map(s => {
+                  const correct = m.questions.reduce(
+                    (n, q) => n + (checkAnswer(s.answers[q.id] ?? "", m.answerKey[q.id] ?? "") ? 1 : 0),
+                    0
+                  );
+                  return (
+                    <span
+                      key={s.id}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border",
+                        getUserDisplay(s.username)?.badgeClass ?? "bg-gray-50 text-gray-500 border-gray-200"
+                      )}
+                    >
+                      {s.username ? <span className="capitalize">{s.username}</span> : <span>?</span>}
+                      <span className="opacity-80">{correct}/{m.questions.length}</span>
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>

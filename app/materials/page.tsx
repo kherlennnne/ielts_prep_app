@@ -5,6 +5,7 @@ import { useStore, Material, TestSession, CalendarEvent, Question, Section, Ques
 import { supabase } from "@/lib/supabase";
 import { getYouTubeId, parseTimestamp } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { UserBadge } from "@/components/ui/UserBadge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { generateId } from "@/lib/utils";
@@ -756,9 +757,12 @@ export default function MaterialsPage() {
                         <span className="text-xs font-bold text-accent-darker capitalize">{s.type[0].toUpperCase()}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {mat?.title ?? `${s.type} test`}
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {mat?.title ?? `${s.type} test`}
+                          </p>
+                          <UserBadge username={s.username} />
+                        </div>
                         <p className="text-xs text-gray-500">
                           {s.date} · {s.score ?? "–"}/{s.maxScore} · {s.completed ? "Completed" : "Incomplete"}
                         </p>

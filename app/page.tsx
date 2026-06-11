@@ -6,6 +6,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { CalendarDays, FlaskConical, BookMarked, Lightbulb, TrendingUp, Clock, CheckCircle2, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { cn, checkAnswer } from "@/lib/utils";
+import { UserBadge } from "@/components/ui/UserBadge";
+import { getUserDisplay } from "@/lib/userDisplay";
 
 export default function Dashboard() {
   const { events, sessions, materials, vocab } = useStore();
@@ -127,12 +129,20 @@ export default function Dashboard() {
       {completedSessions.length > 0 && (() => {
         const s = completedSessions[completedSessions.length - 1];
         const band = (getLiveCorrect(s) / s.maxScore * 9).toFixed(1);
+        const userDisplay = getUserDisplay(s.username);
         return (
           <div className="px-4 lg:px-8 mb-8">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Recent Test</h2>
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-between">
+            <div className={cn(
+              "bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-between",
+              userDisplay?.cardBorderClass,
+              userDisplay?.cardBgClass
+            )}>
               <div>
-                <p className="font-medium text-gray-900 text-sm capitalize">{s.type}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium text-gray-900 text-sm capitalize">{s.type}</p>
+                  <UserBadge username={s.username} />
+                </div>
                 <p className="text-xs text-gray-500">{s.date}</p>
               </div>
               <div className="text-right">

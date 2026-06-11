@@ -13,6 +13,8 @@ import {
   FileText, Headphones, PenLine,
 } from "lucide-react";
 import { TestReview } from "@/components/ui/TestReview";
+import { UserBadge } from "@/components/ui/UserBadge";
+import { getUserDisplay } from "@/lib/userDisplay";
 import { useUser } from "@/lib/useUser";
 
 const DEFAULT_TIMES = { reading: 60, listening: 30, writing: 60 }; // minutes
@@ -30,7 +32,7 @@ export default function TestInner() {
   const {
     materials, sessions, addSession, updateSession, addEvent, updateEvent, updateMaterial,
   } = useStore();
-  const { isCutie } = useUser();
+  const { isCutie, username } = useUser();
 
   const mockMaterials = materials.filter(m => (m.testMode ?? "mock") === "mock");
   const material = materials.find(m => m.id === materialId);
@@ -76,6 +78,7 @@ export default function TestInner() {
     addSession({
       id, date: new Date().toISOString().slice(0, 10),
       materialId: material.id, type: material.type,
+      username: username ?? undefined,
       maxScore: material.questions.length, timeSpent: 0, answers: {}, completed: false,
     });
     setPhase("active");
@@ -640,20 +643,29 @@ function MockMaterialList({ groupMap, ungrouped, sessions, isCutie, onReview, on
     const lastSession = sessions
       .filter(s => s.completed && s.materialId === m.id)
       .sort((a, b) => b.date.localeCompare(a.date))[0];
+    const userDisplay = getUserDisplay(lastSession?.username);
     return (
-      <div className={cn("rounded-2xl border shadow-sm overflow-hidden", lastSession ? "bg-green-50 border-green-200" : "bg-white border-gray-100")}>
+      <div className={cn(
+        "rounded-2xl border shadow-sm overflow-hidden",
+        lastSession
+          ? userDisplay
+            ? cn(userDisplay.cardBorderClass, userDisplay.cardBgClass, "border-gray-100")
+            : "bg-green-50 border-green-200"
+          : "bg-white border-gray-100"
+      )}>
         <div className="p-4 flex items-center gap-3">
           <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center border flex-shrink-0", TYPE_COLORS[m.type])}>
             <Icon size={18} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="font-medium text-gray-900 text-sm truncate">{m.title}</p>
               {lastSession && (
                 <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 border border-green-200 px-1.5 py-0.5 rounded-full">
                   <CheckCircle2 size={10} /> Done
                 </span>
               )}
+              {lastSession?.username && <UserBadge username={lastSession.username} />}
             </div>
             <p className="text-xs text-gray-500 capitalize">{m.type} · {m.questions.length} questions</p>
           </div>
